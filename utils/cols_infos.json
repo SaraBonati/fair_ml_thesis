@@ -1,0 +1,29 @@
+{
+  "ESR": {
+    "0": "Not Employed",
+    "1": "Employed"
+  },
+  "HINS2": {
+    "1": "Insured",
+    "2": "Not Insured"
+  },
+  "PUBCOV": {
+    "1": "Insured",
+    "2": "Not Insured"
+  },
+  "RAC1P": {
+    "1": "White",
+    "2": "Black/African American",
+    "3": "American Indian",
+    "4": "Alaska Native",
+    "5": "American Indian and Alaska Native tribes",
+    "6": "Asian",
+    "7": "Native Hawaiian and Other Pacific Islander",
+    "8": "Some Other Race",
+    "9": "Two or More Races"
+  },
+  "SEX": {
+    "1": "Male",
+    "2": "Female"
+  }
+}
