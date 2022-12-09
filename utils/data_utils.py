@@ -40,6 +40,16 @@ def rawdata_to_task(task: str, state: str, year: int):
         f"Rawdata file for {str(year)} {state} does not exist!"
 
     raw_df = pd.read_csv(os.path.join(ddir, str(year), "1-Year", f"{str(year)}_{state}.csv"), sep=',')
+    print(raw_df['PINCP'].dtype)
+    print(raw_df['WKHP'].dtype)
+    print(raw_df['PWGTP'].dtype)
+    if not (raw_df['PINCP'].dtype == np.float64 or raw_df['PINCP'].dtype == np.int64):
+        raw_df['PINCP'] = raw_df['PINCP'].str.lstrip('0')
+        raw_df['PINCP'] = pd.to_numeric(raw_df['PINCP'], errors='coerce')
+    if not (raw_df['WKHP'].dtype == np.float64 or raw_df['WKHP'].dtype == np.int64):
+        raw_df['WKHP'] = pd.to_numeric(raw_df['WKHP'], errors='coerce')
+    if not (raw_df['PWGTP'].dtype == np.float64 or raw_df['PWGTP'].dtype == np.int64):
+        raw_df['PWGTP'] = pd.to_numeric(raw_df['PWGTP'], errors='coerce')
 
     if task == "ACSIncome":
         features, label, group = ACSIncome.df_to_numpy(raw_df)
@@ -57,6 +67,16 @@ def rawdata_to_task(task: str, state: str, year: int):
     data.to_csv(os.path.join(ddir, str(year), "1-Year", f"{str(year)}_{state}_{task}.csv"), sep=',')
 
 
+def check_missing_values_presence(task: str):
+    """
+    Given a task, this function checks the presence of missing values for each year and state.
+    This can serve as an indication of whether to impute missing values or drop rows
+    :param task:
+    :return:
+    """
+    print('TODO')
+
+
 if __name__ == "__main__":
 
     # --------Specify arguments--------------------------
@@ -65,14 +85,14 @@ if __name__ == "__main__":
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
-        "-m", "--mode", type = str, help="indicate what method to run (download or rawdata_to_task)"
+        "-m", "--mode", type=str, help="indicate what method to run (download or rawdata_to_task)"
     )
     args = parser.parse_args()
 
     if args.mode == 'download':
         download_data()
     elif args.mode == 'rawdata_to_task':
-        for t in task_infos["task_names"]:
+        for t in ["ACSHealthInsurance"]: #task_infos["task_names"]:
             for y in task_infos["years"]:
                 for s in task_infos["states"]:
                     print(t, y, s)
