@@ -16,11 +16,11 @@ import streamlit as st
 import os
 import glob
 import json
-from utils.eda_utils import plot_ml_results_spatial, make_mapplot
+from utils.eda_utils import plot_ml_results_spatial, plot_ml_results_temporal, make_mapplot
 
 # directory management
 wdir = os.getcwd()  # working directory
-ddir = os.path.join(os.path.split(os.path.split(wdir)[0])[0], "fair_ml_thesis_data", "results")
+ddir = os.path.join(os.path.split(os.path.split(wdir)[0])[0],"master_thesis", "fair_ml_thesis_data", "results")
 # tasks metadata (e,g, which columns are categorical, which column is the target etc..)
 json_file_path = os.path.join(wdir, 'utils', 'tasks_metadata.json')
 with open(json_file_path, 'r') as j:
@@ -55,7 +55,7 @@ if select_context == 'Spatial':
 
     df = pd.read_csv(results_sklearn_paths[0], header=0, sep=',')
     df.rename(columns={'Unnamed: 0': 'state'}, inplace=True)
-    # st.write(df)
+    st.write(df)
 
     st.markdown(f"## Figure 1 - {select_state} as training data, results when tested on all other us states")
 
@@ -65,19 +65,25 @@ if select_context == 'Spatial':
 
     # statistical parity + disparate impact ratio (sex)
     st.markdown(f"### SPD (SEX) - {select_state} as training data (closer to zero is better)")
-    st.plotly_chart(make_mapplot(df, "sex_spd","SPD (SEX)",select_context,"blues"))
+    st.plotly_chart(make_mapplot(df, "sex_spd", "SPD (SEX)", select_context, "blues"))
     st.markdown(f"### DIR (SEX) - {select_state} as training data (higher is better)")
-    st.plotly_chart(make_mapplot(df, "sex_dir","DIR (SEX)",select_context,"blues"))
+    st.plotly_chart(make_mapplot(df, "sex_dir", "DIR (SEX)", select_context, "blues"))
 
     # statistical parity + disparate impact ratio (race)
     st.markdown(f"### SPD (RACE) - {select_state} as training data (closer to zero is better)")
-    st.plotly_chart(make_mapplot(df, "rac_spd","SPD (RACE)",select_context,"blues"))
+    st.plotly_chart(make_mapplot(df, "rac_spd", "SPD (RACE)", select_context, "reds"))
     st.markdown(f"### DIR (RACE) - {select_state} as training data (higher is better)")
-    st.plotly_chart(make_mapplot(df, "rac_dir","DIR (RACE)",select_context,"blues"))
+    st.plotly_chart(make_mapplot(df, "rac_dir", "DIR (RACE)", select_context, "reds"))
 
 if select_context == 'Temporal':
     select_year = st.slider('Which year do you want to use?', 2014, 2018)
     # select data paths according to year selection
-    results_sklearn_paths = glob.glob(os.path.join(ddir, select_task, str(select_year), 'sklearn',
-                                                   select_state) + f'/{select_state}_test_{str(select_year)}.csv')
-    results_sklearn_paths.sort()
+    results_sklearn_paths = glob.glob(os.path.join(ddir, select_task, str(select_year), 'sklearn',select_state,
+                                                   f'temporal_{select_state}_test_{str(select_year)}.csv'))
+
+    df = pd.read_csv(results_sklearn_paths[0], sep=',')
+    st.write(df)
+
+    # accuracy
+    fig = plot_ml_results_temporal(results_sklearn_paths[0])
+    st.plotly_chart(fig)

@@ -11,8 +11,8 @@
 
 import json
 import os
-from utils.eda_utils import eda_metrics_usa, make_mapplot, make_demographic_plots
-# general utility import
+from utils.eda_utils import eda_metrics_usa, make_mapplot, make_demographic_plots, merge_dataframes_eda, \
+    preprocess_healthinsurance, make_protected_plots
 import pandas as pd
 import plotly.express as px
 import streamlit as st
@@ -61,47 +61,85 @@ if submitted:
 
     data = pd.read_csv(os.path.join(ddir, str(select_year), '1-Year',
                                     f'{str(select_year)}_{select_state}_{select_task}.csv'), sep=',')
-    df2 = data
-    df2['RAC1P'] = df2['RAC1P'].map(cols_infos['RAC1P'])
-    df2['SEX'] = df2['SEX'].map(cols_infos['SEX'])
-    df2['ESR'] = df2['ESR'].map(cols_infos['ESR'])
-    st.dataframe(df2)
+    target_name = task_infos["tasks"][task_infos["task_col_map"][select_task]]["target"]
+
+    if select_task == "ACSHealthInsurance":
+        data = preprocess_healthinsurance(data)
+    data["RAC1P_r"] = data['RAC1P']
+    data.loc[data['RAC1P_r'] > 2, 'RAC1P_r'] = 3
+
+    data['RAC1P'] = data['RAC1P'].map(cols_infos['RAC1P'])
+    data['RAC1P_r'] = data['RAC1P_r'].map(cols_infos['RAC1P_r'])
+    data['SEX'] = data['SEX'].map(cols_infos['SEX'])
+    data['MAR'] = data['MAR'].map(cols_infos['MAR'])
+    data['SCHL'] = data['SCHL'].map(cols_infos['SCHL'])
+    data['NATIVITY'] = data['NATIVITY'].map(cols_infos['NATIVITY'])
+    data[target_name] = data[target_name].map(cols_infos[target_name])
+    st.dataframe(data)
+
+    data_merged = merge_dataframes_eda([os.path.join(ddir, str(y), '1-Year',
+                                                     f'{str(y)}_{select_state}_{select_task}.csv') for y in
+                                        task_infos["years"]],
+                                       select_task)
+    data_merged["RAC1P_r"] = data_merged['RAC1P']
+    data_merged.loc[data_merged['RAC1P_r'] > 2, 'RAC1P_r'] = 3
+    data_merged['RAC1P'] = data_merged['RAC1P'].map(cols_infos['RAC1P'])
+    data_merged['RAC1P_r'] = data_merged['RAC1P_r'].map(cols_infos['RAC1P_r'])
+    data_merged['SEX'] = data_merged['SEX'].map(cols_infos['SEX'])
+    data_merged['MAR'] = data_merged['MAR'].map(cols_infos['MAR'])
+    data_merged['SCHL'] = data_merged['SCHL'].map(cols_infos['SCHL'])
+    data_merged['NATIVITY'] = data_merged['NATIVITY'].map(cols_infos['NATIVITY'])
+    data_merged[target_name] = data_merged[target_name].map(cols_infos[target_name])
 
     #############################################
     # state-specific metrics
     #############################################
-    col1, col2, col3 = st.columns(3)
+    st.markdown(f"### Metrics of {select_state} in {select_year}")
+    col1, col2, col3, col4 = st.columns(4)
     col1.metric("N^ of Samples",
                 value=len(data),
                 delta_color='off')
-    col2.metric(f"% of male samples ({select_year})",
+    col2.metric(f"% of male samples",
                 value=round((len(data[data['SEX'] == 'Male']) / len(data)) * 100, 2),
                 delta_color='off')
-    col3.metric(f"% of white samples ({select_year})",
+    col3.metric(f"% of white samples",
                 value=round((len(data[data['RAC1P'] == 'White']) / len(data)) * 100, 2),
                 delta_color='off')
+    col4.metric(f"% of foreign-born samples",
+                value=round((len(data[data['NATIVITY'] == 'Foreign born']) / len(data)) * 100, 2),
+                delta_color='off')
+
+    #############################################
+    # state-specific protected attributes info
+    #############################################
+
+    fig1, fig2 = make_protected_plots(data, data_merged, target_name)
+    st.plotly_chart(fig1)
+    st.plotly_chart(fig2)
 
     #############################################
     # state-specific demographic info
     #############################################
     target_name = task_infos["tasks"][task_infos["task_col_map"][select_task]]["target"]
-    fig1, fig2 = make_demographic_plots(df2, target_name)
+    fig1, fig2, fig3, fig4, fig5, fig6 = make_demographic_plots(data, data_merged, target_name)
 
-    # figure 1
-    st.markdown(f"""## How does the distribution of {data[target_name].unique()[0]} VS {data[target_name].unique()[1]} 
-                in {select_state} change as a function of race and sex?""")
+    # figure 1 and figure 2
+    st.markdown(
+        f"""## How does the distribution of {data[target_name].unique()[0]} VS {data[target_name].unique()[1]} in {select_state} change as a function of race and sex?""")
     st.plotly_chart(fig1, use_container_width=True)
-    # figure 2
-    st.markdown(f"## What is the age distribution in {select_state} as a function of race and sex?")
+    st.markdown(f"""## How does the distribution above evolve across the years in {select_state}? (Race recoded)""")
     st.plotly_chart(fig2, use_container_width=True)
-    # figure 3
+    # figure 3 and figure 4
+    st.markdown(f"## What is the age distribution in {select_state} as a function of race and sex?")
+    st.plotly_chart(fig3, use_container_width=True)
+    st.markdown(f"""## How does the age distribution above evolve across the years in {select_state}? (Race recoded)""")
+    st.plotly_chart(fig4, use_container_width=True)
+    # figure 5 and figure 6
     st.markdown(f"## What is the education status distribution in {select_state} as a function of race and sex?")
-    selected_race = st.selectbox('Select an ethnicity:', list(cols_infos['RAC1P'].values()))
-    if selected_race:
-        fig3 = px.histogram(df2[df2['RAC1P'] == selected_race], x="RAC1P", y="SCHL", facet_row=target_name,
-                            color='SEX', color_discrete_map={'Female': 'coral', 'Male': 'teal'}, barmode='group',
-                            histfunc='count', width=800, height=800)
-        st.plotly_chart(fig3, use_container_width=True)
+    st.plotly_chart(fig5, use_container_width=True)
+    st.markdown(
+        f"## How does the education status distribution above evolve across the years in {select_state}? (Race recoded)")
+    st.plotly_chart(fig6)
 
     #############################################
     # ALL US states figures
@@ -113,14 +151,14 @@ if submitted:
         #############################################
         # map of attribute SEX and RAC1P across US states
         #############################################
-        fig2 = make_mapplot(metrics, "disp_sex", "Disparate impact ratio (SEX)","Temporal","coolwarm")
+        fig2 = make_mapplot(metrics, "disp_sex", "Disparate impact ratio (SEX)", "Temporal", "coolwarm")
         fig2.update_layout(title_font_family="Helvetica",
                            title_font_size=20,
                            title_font_color="black",
                            title_x=0.45)
         st.plotly_chart(fig2)
 
-        fig3 = make_mapplot(metrics, "disp_race", "Disparate impact ratio (RACE)","Temporal","coolwarm")
+        fig3 = make_mapplot(metrics, "disp_race", "Disparate impact ratio (RACE)", "Temporal", "coolwarm")
         fig3.update_layout(title_font_family="Helvetica",
                            title_font_size=20,
                            title_font_color="black",
