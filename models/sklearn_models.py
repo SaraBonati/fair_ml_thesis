@@ -27,7 +27,8 @@ from aif360.sklearn.metrics import statistical_parity_difference, disparate_impa
 #########################
 class Model:
 
-    def __init__(self, train_data_source, test_data_source, task, cat_columns, num_columns, spatial_year=None,
+    def __init__(self, train_data_source, test_data_source, task, cat_columns, num_columns,
+                 target_col: str, spatial_year=None,
                  temporal_train_year=None, temporal_test_years=None, train_state=None, test_states=None):
         """_summary_
 
@@ -56,6 +57,7 @@ class Model:
         # collect the categorical and numerical columns of this task
         self.cat_columns = cat_columns
         self.num_columns = num_columns
+        self.target_col = target_col
         # year chosen for the spatial context (if spatial context was selected)
         self.spatial_year = spatial_year
         # training year (if temporal context was selected)
@@ -67,7 +69,7 @@ class Model:
         self.train_df = train_data_source
         self.train_state = train_state
         self.cols = self.train_df.columns
-        self.y_train = self.train_df['ESR']
+        self.y_train = self.train_df[self.target_col]
 
         # Prepare test data
         self.all_states = False
@@ -78,7 +80,7 @@ class Model:
 
         else:
             self.test_df = test_data_source
-            self.y_test = self.test_df['ESR']
+            self.y_test = self.test_df[self.target_col]
 
         # seed (for reproducible output across multiple function calls)
         self.seed = 42
@@ -109,6 +111,16 @@ class Model:
             df (pd.Dataframe): the dataframe on which to apply preprocessing
         """
 
+        df['RAC1P'] = pd.to_numeric(df['RAC1P'])
+        # take care of special case of RAC1P column for ACSHealthInsurance task
+        if self.task == "ACSHealthInsurance":
+            df['RAC1P'] = df[['RACAIAN', 'RACASN', 'RACBLK', 'RACNH', 'RACPI', 'RACSOR', 'RACWHT']].idxmax(axis=1)
+            race_codes = {'RACAIAN': 5, 'RACASN': 6, 'RACBLK': 2, 'RACNH': 7, 'RACPI': 7, 'RACSOR': 8, 'RACWHT': 1}
+            df['RAC1P'] = df['RAC1P'].map(race_codes)
+            df.drop(['RACAIAN', 'RACASN', 'RACBLK', 'RACNH', 'RACPI', 'RACSOR', 'RACWHT'], axis=1, inplace=True)
+        # recode RAC1P values for all tasks
+        df.loc[df['RAC1P'] > 2, 'RAC1P'] = 3
+
         print(f"Categorical columns: {self.cat_columns}")
         print(f"Numerical columns: {self.num_columns}")
         # turn most columns into categories (usually first col is age, that stays numeric)
@@ -116,16 +128,16 @@ class Model:
             df.loc[:, i] = df[i].astype("category")
 
         # apply standard scaler to numeric variables
-        self.X_num = df[self.num_columns]
-        self.numeric_transformer = StandardScaler()
-        self.X_num.loc[:, self.num_columns] = self.numeric_transformer.fit_transform(self.X_num[self.num_columns])
+        X_num = df[self.num_columns]
+        numeric_transformer = StandardScaler()
+        X_num.loc[:, self.num_columns] = numeric_transformer.fit_transform(X_num[self.num_columns])
 
         # apply one hot encoding to categorical columns
         # note: for HealthInsurance tasks the race column is in wide format already
-        self.X_cat = df[self.cat_columns]
-        self.X_cat = pd.get_dummies(self.X_cat, columns=self.cat_columns, drop_first=False)
+        X_cat = df[self.cat_columns]
+        X_cat = pd.get_dummies(X_cat, columns=self.cat_columns, drop_first=False)
 
-        return pd.concat([self.X_num, self.X_cat], axis=1)
+        return pd.concat([X_num, X_cat], axis=1)
 
     def test_model_spatial(self):
         """
@@ -147,11 +159,12 @@ class Model:
             for t in range(len(self.test_dfs)):
 
                 # create testing data
-                self.X_test_to_preprocess, self.y_test = self.test_dfs[t][self.cols[:-1]], self.test_dfs[t]['ESR']
+                self.X_test_to_preprocess, self.y_test = self.test_dfs[t][self.cols[:-1]], self.test_dfs[t][
+                    self.target_col]
                 # create y_test in the form of dataframe indexed
                 # by protected attributes (for metric calculation purposes)
                 self.y_test_df = self.X_test_to_preprocess[['SEX', 'RAC1P']]
-                self.y_test_df['ESR'] = self.y_test
+                self.y_test_df[self.target_col] = self.y_test
                 self.y_test_df.set_index(['SEX', 'RAC1P'], inplace=True)
                 self.X_test = self.preprocess(self.X_test_to_preprocess)
                 # because some categories might not be present in test data but are still expected by
@@ -224,7 +237,7 @@ class Model:
 
             # initialize fairness metrics dict + specifiy clfier results
             metricss[clf_name] = {}
-
+            print(self.train_df.info())
             # fit on training data (one state)
             # for train, test in cv_object.split(bold_masked,**cv_object_args):
             self.X_train = self.preprocess(self.train_df)
@@ -237,12 +250,13 @@ class Model:
                 metricss[clf_name][self.test_years[t]] = {}
 
                 # create testing data
-                self.X_test_to_preprocess, self.y_test = self.test_dfs[t][self.cols[:-1]], self.test_dfs[t]['ESR']
+                self.X_test_to_preprocess, self.y_test = self.test_dfs[t][self.cols[:-1]], self.test_dfs[t][
+                    self.target_col]
                 print(self.y_test)
                 # create y_test in the form of dataframe indexed vby protected attributes
                 # (for metric calculation purposes)
                 self.y_test_df = self.X_test_to_preprocess[['SEX', 'RAC1P']]
-                self.y_test_df['ESR'] = self.y_test
+                self.y_test_df[self.target_col] = self.y_test
                 self.y_test_df.set_index(['SEX', 'RAC1P'], inplace=True)
                 self.X_test = self.preprocess(self.X_test_to_preprocess)
                 # because some categories might not be present in test data but are still expected by
@@ -256,8 +270,9 @@ class Model:
                 # get predictions from classifier
                 y_pred = clfier.predict(self.X_test)
 
-                print(self.y_test.value_counts())
-                print(y_pred)
+                # print(self.y_test.value_counts())
+                # print(y_pred)
+
                 # calculate metrics
                 metricss[clf_name][self.test_years[t]] = {}
                 metricss[clf_name][self.test_years[t]]['accuracy'] = accuracy_score(self.y_test, y_pred)
@@ -351,12 +366,13 @@ if __name__ == "__main__":
                 test_states = []
                 test_data_file_paths = [f for f in data_file_paths if select_state_train not in f]
                 for p in range(len(test_data_file_paths)):
-                    test_states.append(test_data_file_paths[p][-6:-4])
+                    test_states.append(os.path.split(test_data_file_paths[p])[1][5:7])
                     test_df = pd.read_csv(test_data_file_paths[p], sep=',', index_col=0)
                     test_dfs.append(test_df)
 
                 M = Model(train_df, test_dfs, args.task, task_infos['tasks'][1]['cat_columns'],
                           task_infos['tasks'][1]['num_columns'],
+                          task_infos["tasks"][task_infos["task_col_map"][args.task]]["target"],
                           spatial_year=select_year,
                           train_state=select_state_train,
                           test_states=test_states)
@@ -388,12 +404,13 @@ if __name__ == "__main__":
                     for y in years_to_test]
 
                 for p in range(len(test_data_file_paths)):
-                    test_states.append(test_data_file_paths[p][-6:-4])
+                    test_states.append(os.path.split(test_data_file_paths[p])[1][5:7])
                     test_df = pd.read_csv(test_data_file_paths[p], sep=',', index_col=0)
                     test_dfs.append(test_df)
 
                 M = Model(train_df, test_dfs, args.task, task_infos['tasks'][1]['cat_columns'],
                           task_infos['tasks'][1]['num_columns'],
+                          task_infos["tasks"][task_infos["task_col_map"][args.task]]["target"],
                           temporal_train_year=select_year,
                           temporal_test_years=years_to_test,
                           train_state=select_state_train,
