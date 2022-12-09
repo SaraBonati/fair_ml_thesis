@@ -14,8 +14,9 @@ import os
 
 import pandas as pd
 from aif360.sklearn.metrics import statistical_parity_difference, disparate_impact_ratio
-from aif360.algorithms.inprocessing import PrejudiceRemover
+from aif360.algorithms.inprocessing import PrejudiceRemover, GridSearchReduction
 from sklearn.model_selection import KFold
+from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import accuracy_score, balanced_accuracy_score, precision_score, recall_score
 
@@ -84,8 +85,6 @@ class Model:
         # seed (for reproducible output across multiple function calls)
         self.seed = 42
 
-        # define available classifiers + cross-validation strategy
-        self.clf_set = {'PrejudiceRemover': PrejudiceRemover()}
         # define cross-validation strategy
         self.cv_set = {'KFold': KFold(n_splits=5, shuffle=True, random_state=self.seed)}
 
@@ -108,17 +107,24 @@ class Model:
         for i in self.cat_columns:
             df.loc[:, i] = df[i].astype("category")
 
+        # take care of special case of RAC1P column for ACSHealthInsurance task
+        if self.task == "ACSHealthInsurance":
+            df['RAC1P'] = df[['RACAIAN', 'RACASN', 'RACBLK', 'RACNH', 'RACPI', 'RACSOR', 'RACWHT']].idxmax(axis=1)
+            race_codes = {'RACAIAN': 5, 'RACASN': 6, 'RACBLK': 2, 'RACNH': 7, 'RACPI': 7, 'RACSOR': 8, 'RACWHT': 1}
+            df['RAC1P'] = df['RAC1P'].map(race_codes)
+            df.drop(['RACAIAN', 'RACASN', 'RACBLK', 'RACNH', 'RACPI', 'RACSOR', 'RACWHT'], axis=1, inplace=True)
+
         # apply standard scaler to numeric variables
-        self.X_num = df[self.num_columns]
-        self.numeric_transformer = StandardScaler()
-        self.X_num.loc[:, self.num_columns] = self.numeric_transformer.fit_transform(self.X_num[self.num_columns])
+        X_num = df[self.num_columns]
+        numeric_transformer = StandardScaler()
+        X_num.loc[:, self.num_columns] = numeric_transformer.fit_transform(X_num[self.num_columns])
 
         # apply one hot encoding to categorical columns
         # note: for HealthInsurance tasks the race column is in wide format already
-        self.X_cat = df[self.cat_columns]
-        self.X_cat = pd.get_dummies(self.X_cat, columns=self.cat_columns, drop_first=False)
+        X_cat = df[self.cat_columns]
+        X_cat = pd.get_dummies(X_cat, columns=self.cat_columns, drop_first=False)
 
-        return pd.concat([self.X_num, self.X_cat], axis=1)
+        return pd.concat([X_num, X_cat], axis=1)
 
     def test_model_spatial(self):
         """
@@ -126,6 +132,12 @@ class Model:
         """
 
         metricss = {}
+        estimator = LogisticRegression(solver='liblinear', random_state=1234)
+        self.clf_set = {"GridSearchReduction": GridSearchReduction(prot_attr=prot_attr,
+                                                                   estimator=estimator,
+                                                                   constraints="EqualizedOdds",
+                                                                   grid_size=20,
+                                                                   drop_prot_attr=False)}
 
         for clf_name, clfier in self.clf_set.items():
 
@@ -140,7 +152,8 @@ class Model:
             for t in range(len(self.test_dfs)):
 
                 # create testing data
-                self.X_test_to_preprocess, self.y_test = self.test_dfs[t][self.cols[:-1]], self.test_dfs[t][self.target_col]
+                self.X_test_to_preprocess, self.y_test = self.test_dfs[t][self.cols[:-1]], self.test_dfs[t][
+                    self.target_col]
                 # create y_test in the form of dataframe indexed
                 # by protected attributes (for metric calculation purposes)
                 self.y_test_df = self.X_test_to_preprocess[['SEX', 'RAC1P']]
@@ -210,8 +223,13 @@ class Model:
         test on CA 2015, CA 2016 ...
         """
 
-        # initalize metrics dict
         metricss = {}
+        estimator = LogisticRegression(solver='liblinear', random_state=1234)
+        self.clf_set = {"GridSearchReduction": GridSearchReduction(prot_attr=prot_attr,
+                                                                   estimator=estimator,
+                                                                   constraints="EqualizedOdds",
+                                                                   grid_size=20,
+                                                                   drop_prot_attr=False)}
 
         for clf_name, clfier in self.clf_set.items():
 
