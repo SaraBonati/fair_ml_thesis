@@ -45,7 +45,8 @@ select_context = ml_form.selectbox('Which context do you want to focus on?', ['S
 ml_form_submitted = ml_form.form_submit_button("Submit")
 
 if select_context == 'Spatial':
-    select_year = st.slider('Which year do you want to use?', min(task_infos['years']), max(task_infos['years']))
+    select_year = st.selectbox('Which year do you want to use?', np.arange(min(task_infos['years']),
+                                                                           max(task_infos['years'])+1))
     # select data paths according to year selection
     # ddir -> C:\Users\sarab\Desktop\Data_Science_MSc\master_thesis\thesis_code\results\ACSEmployment
     results_sklearn_paths = glob.glob(

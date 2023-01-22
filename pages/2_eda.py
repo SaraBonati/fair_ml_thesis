@@ -16,6 +16,7 @@ from utils.eda_utils import eda_metrics_usa, make_mapplot, make_demographic_plot
 import pandas as pd
 import plotly.express as px
 import streamlit as st
+import numpy as np
 
 # directory management
 wdir = os.getcwd()
@@ -42,7 +43,10 @@ st.set_page_config(
     page_icon="📊",
 )
 
-st.markdown("# EDA of dataset")
+st.markdown("""
+            # EDA of dataset
+            In this section of the app you can perform some exploratory data analysis (EDA) on the US Census dataset.
+            """)
 st.sidebar.markdown("# EDA of dataset")
 
 #############################################
@@ -53,16 +57,19 @@ eda_form = st.form("My form")
 
 select_task = eda_form.selectbox('Which classification task do you want to focus on?', task_infos['task_names'])
 select_state = eda_form.selectbox('Which state do you want to see?', task_infos['states'])
-select_year = eda_form.slider('Which year do you want to see?', min(task_infos['years']), max(task_infos['years']))
+select_year = eda_form.selectbox('Which year do you want to see?', np.arange(min(task_infos['years']),
+                                                                             max(task_infos['years'])+1))
 show_all_usa = eda_form.checkbox("Show EDA also for all US states")
 submitted = eda_form.form_submit_button("Submit")
 
 if submitted:
 
+    # load data
     data = pd.read_csv(os.path.join(ddir, str(select_year), '1-Year',
                                     f'{str(select_year)}_{select_state}_{select_task}.csv'), sep=',')
     target_name = task_infos["tasks"][task_infos["task_col_map"][select_task]]["target"]
 
+    # map int values to string values in order to make plots more understandable
     if select_task == "ACSHealthInsurance":
         data = preprocess_healthinsurance(data)
     data["RAC1P_r"] = data['RAC1P']
