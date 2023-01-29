@@ -11,14 +11,20 @@ import argparse
 import glob
 import json
 import os
-
+import re
+from pathlib import Path
+import numpy as np
 import pandas as pd
 from aif360.sklearn.metrics import statistical_parity_difference, disparate_impact_ratio
-from aif360.algorithms.inprocessing import PrejudiceRemover, GridSearchReduction
+from aif360.algorithms.inprocessing import PrejudiceRemover
+from aif360.sklearn.inprocessing import AdversarialDebiasing, GridSearchReduction, ExponentiatedGradientReduction
 from sklearn.model_selection import KFold
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import accuracy_score, balanced_accuracy_score, precision_score, recall_score
+
+import tensorflow as tf
+tf.compat.v1.disable_eager_execution()
 
 
 #########################
@@ -77,13 +83,24 @@ class Model:
             self.all_states = True
             self.test_states = test_states
             self.test_dfs = test_data_source
-
         else:
             self.test_df = test_data_source
             self.y_test = self.test_df[self.target_col]
 
+        print(self.test_states)
         # seed (for reproducible output across multiple function calls)
         self.seed = 42
+
+        # define classifiers available
+        estimator = LogisticRegression(solver='liblinear', random_state=self.seed)
+        self.clf_set = {"AdversarialDebiasing": AdversarialDebiasing(prot_attr=['SEX', 'RAC1P'],
+                                                                     random_state=self.seed)#,
+                        #"ExponentiatedGradientReduction": ExponentiatedGradientReduction(prot_attr=['SEX','RAC1P'],
+                        #                                                                estimator=estimator,
+                        #                                                                constraints="EqualizedOdds",
+                        #                                                                drop_prot_attr=False,
+                        #                                                                random_state=self.seed),
+                        }
 
         # define cross-validation strategy
         self.cv_set = {'KFold': KFold(n_splits=5, shuffle=True, random_state=self.seed)}
@@ -101,18 +118,27 @@ class Model:
             df (pd.Dataframe): the dataframe on which to apply preprocessing
         """
 
-        print(f"Categorical columns: {self.cat_columns}")
-        print(f"Numerical columns: {self.num_columns}")
-        # turn most columns into categories (usually first col is age, that stays numeric)
-        for i in self.cat_columns:
-            df.loc[:, i] = df[i].astype("category")
-
+        df['RAC1P'] = pd.to_numeric(df['RAC1P'])
         # take care of special case of RAC1P column for ACSHealthInsurance task
         if self.task == "ACSHealthInsurance":
             df['RAC1P'] = df[['RACAIAN', 'RACASN', 'RACBLK', 'RACNH', 'RACPI', 'RACSOR', 'RACWHT']].idxmax(axis=1)
             race_codes = {'RACAIAN': 5, 'RACASN': 6, 'RACBLK': 2, 'RACNH': 7, 'RACPI': 7, 'RACSOR': 8, 'RACWHT': 1}
             df['RAC1P'] = df['RAC1P'].map(race_codes)
             df.drop(['RACAIAN', 'RACASN', 'RACBLK', 'RACNH', 'RACPI', 'RACSOR', 'RACWHT'], axis=1, inplace=True)
+        # recode RAC1P values for all tasks
+        df.loc[df['RAC1P'] > 2, 'RAC1P'] = 3
+
+        # set protected attributes to be an index (this is the format expected by aif360)
+        prot_attr_copy = df[['SEX', 'RAC1P']]
+        df.index = pd.MultiIndex.from_frame(prot_attr_copy)
+        #df.set_index(['SEX', 'RAC1P'],inplace=True)
+
+        # turn most columns into categories (usually first col is age, that stays numeric)
+        for i in self.cat_columns:
+            # first remove the trailing zero by turning categorical numbers into ints
+            df.loc[:, i] = df[i].astype(np.int64)
+            # then treat columns as categories
+            df.loc[:, i] = df[i].astype("category")
 
         # apply standard scaler to numeric variables
         X_num = df[self.num_columns]
@@ -120,9 +146,12 @@ class Model:
         X_num.loc[:, self.num_columns] = numeric_transformer.fit_transform(X_num[self.num_columns])
 
         # apply one hot encoding to categorical columns
-        # note: for HealthInsurance tasks the race column is in wide format already
+        # X_cat = df[self.cat_columns[:-2]]
+        # X_cat = pd.get_dummies(X_cat, columns=self.cat_columns[:-2], drop_first=False)
         X_cat = df[self.cat_columns]
         X_cat = pd.get_dummies(X_cat, columns=self.cat_columns, drop_first=False)
+        # print("Cat columns: ", self.cat_columns)
+        # print("X_cat columns: ", X_cat.columns)
 
         return pd.concat([X_num, X_cat], axis=1)
 
@@ -132,16 +161,10 @@ class Model:
         """
 
         metricss = {}
-        estimator = LogisticRegression(solver='liblinear', random_state=1234)
-        self.clf_set = {"GridSearchReduction": GridSearchReduction(prot_attr=prot_attr,
-                                                                   estimator=estimator,
-                                                                   constraints="EqualizedOdds",
-                                                                   grid_size=20,
-                                                                   drop_prot_attr=False)}
 
         for clf_name, clfier in self.clf_set.items():
 
-            # initialize fairness metrics dict + specifiy clfier results
+            # initialize fairness metrics dict + specify clfier results
             metricss[clf_name] = {}
 
             # fit on training data (one state)
@@ -160,14 +183,16 @@ class Model:
                 self.y_test_df[self.target_col] = self.y_test
                 self.y_test_df.set_index(['SEX', 'RAC1P'], inplace=True)
                 self.X_test = self.preprocess(self.X_test_to_preprocess)
+
                 # because some categories might not be present in test data but are still expected by
                 # the classifier after fit check if this is the case, and if yes add these columns to X_test
                 cols_to_fill = set(self.X_train.columns) - set(self.X_test.columns)
-                print(cols_to_fill)
+                print("COLS TO FILL:", cols_to_fill)
                 if cols_to_fill:
                     for c in cols_to_fill:
                         self.X_test[c] = 0
                 self.X_test = self.X_test[self.X_train.columns]
+
                 # get predictions from classifier
                 y_pred = clfier.predict(self.X_test)
 
@@ -202,7 +227,7 @@ class Model:
                                                                                             priv_group=1,
                                                                                             pos_label=1,
                                                                                             sample_weight=None)
-
+            print(metricss[clf_name])
             # save all test states' results
             dfObj = pd.DataFrame.from_dict(metricss[clf_name], orient='index')
             # create results folder for the training state if not present already
@@ -224,12 +249,6 @@ class Model:
         """
 
         metricss = {}
-        estimator = LogisticRegression(solver='liblinear', random_state=1234)
-        self.clf_set = {"GridSearchReduction": GridSearchReduction(prot_attr=prot_attr,
-                                                                   estimator=estimator,
-                                                                   constraints="EqualizedOdds",
-                                                                   grid_size=20,
-                                                                   drop_prot_attr=False)}
 
         for clf_name, clfier in self.clf_set.items():
 
@@ -256,6 +275,7 @@ class Model:
                 self.y_test_df['ESR'] = self.y_test
                 self.y_test_df.set_index(['SEX', 'RAC1P'], inplace=True)
                 self.X_test = self.preprocess(self.X_test_to_preprocess)
+
                 # because some categories might not be present in test data but are still expected by
                 # the classifier after fit check if this is the case, and if yes add these columns to X_test
                 cols_to_fill = set(self.X_train.columns) - set(self.X_test.columns)
@@ -264,6 +284,7 @@ class Model:
                     for c in cols_to_fill:
                         self.X_test[c] = 0
                 self.X_test = self.X_test[self.X_train.columns]
+
                 # get predictions from classifier
                 y_pred = clfier.predict(self.X_test)
 
@@ -340,6 +361,9 @@ if __name__ == "__main__":
     with open(json_file_path, 'r') as j:
         task_infos = json.loads(j.read())
 
+    # define regex pattern to extract names of all test states
+    test_state_pattern = re.compile(r"_([^_]+)_")
+
     # if mode is spatial:
     if args.mode == "spatial":
 
@@ -348,7 +372,8 @@ if __name__ == "__main__":
                 os.path.join(ddir, str(select_year), '1-Year') + f'/{str(select_year)}_*_{args.task}.csv')
             data_file_paths.sort()
 
-            for select_state_train in task_infos["states"]:
+            for select_state_train in task_infos["states"][1:]:
+                print("TRAIN STATE: ",select_state_train)
                 # load train data
                 train_df = pd.read_csv(os.path.join(ddir, str(select_year), '1-Year',
                                                     f'{str(select_year)}_{select_state_train}_{args.task}.csv'),
@@ -359,7 +384,8 @@ if __name__ == "__main__":
                 test_states = []
                 test_data_file_paths = [f for f in data_file_paths if select_state_train not in f]
                 for p in range(len(test_data_file_paths)):
-                    test_states.append(test_data_file_paths[p][-6:-4])
+                    test_path = Path(test_data_file_paths[p])
+                    test_states.append(test_state_pattern.findall(test_path.name)[-1])
                     test_df = pd.read_csv(test_data_file_paths[p], sep=',', index_col=0)
                     test_dfs.append(test_df)
 
@@ -397,7 +423,8 @@ if __name__ == "__main__":
                     for y in years_to_test]
 
                 for p in range(len(test_data_file_paths)):
-                    test_states.append(test_data_file_paths[p][-6:-4])
+                    test_path = Path(test_data_file_paths[p])
+                    test_states.append(test_state_pattern.findall(test_path.name)[-1])
                     test_df = pd.read_csv(test_data_file_paths[p], sep=',', index_col=0)
                     test_dfs.append(test_df)
 
