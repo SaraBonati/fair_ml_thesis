@@ -1,7 +1,7 @@
 import argparse
 import json
 import os
-
+import glob
 import numpy as np
 import pandas as pd
 from folktables import ACSDataSource, ACSEmployment, ACSIncome, ACSHealthInsurance
@@ -14,12 +14,10 @@ with open(json_file_path, 'r') as j:
     task_infos = json.loads(j.read())
 
 
-def download_data(survey_year: int, survey='person', horizon='1-Year'):
+def download_data(survey_year: int):
     """
     Download data to folder in local system
     :param survey_year: year to be downloaded
-    :param survey: string indicating if person or household data (defaults to 'person')
-    :param horizon: string indicating if 1 or 5 year horizon data (defaults to '1-Year')
     :return:
     """
 
@@ -52,19 +50,21 @@ def rawdata_to_task(task: str, state: str, year: int):
         raw_df['PWGTP'] = pd.to_numeric(raw_df['PWGTP'], errors='coerce')
 
     if task == "ACSIncome":
-        features, label, group = ACSIncome.df_to_numpy(raw_df)
+        features, label, _ = ACSIncome.df_to_numpy(raw_df)
         c = np.append(features, np.expand_dims(label, axis=1), axis=1)
         data = pd.DataFrame(data=c, columns=task_infos['tasks'][0]['columns'])
     elif task == "ACSEmployment":
-        features, label, group = ACSEmployment.df_to_numpy(raw_df)
+        features, label, _ = ACSEmployment.df_to_numpy(raw_df)
         c = np.append(features, np.expand_dims(label, axis=1), axis=1)
         data = pd.DataFrame(data=c, columns=task_infos['tasks'][1]['columns'])
     elif task == "ACSHealthInsurance":
-        features, label, group = ACSHealthInsurance.df_to_numpy(raw_df)
+        features, label, _ = ACSHealthInsurance.df_to_numpy(raw_df)
         c = np.append(features, np.expand_dims(label, axis=1), axis=1)
         data = pd.DataFrame(data=c, columns=task_infos['tasks'][2]['columns'])
 
-    data.to_csv(os.path.join(ddir, str(year), "1-Year", f"{str(year)}_{state}_{task}.csv"), sep=',')
+    if not os.path.exists(os.path.join(ddir, str(year), "1-Year")):
+        os.makedirs(os.path.join(ddir, str(year), "1-Year"))
+    data.to_csv(os.path.join(ddir, str(year), "1-Year", f"{str(year)}_{state}_{task}.csv"), sep=',', index=False)
 
 
 def check_missing_values_presence(task: str):
@@ -74,7 +74,12 @@ def check_missing_values_presence(task: str):
     :param task:
     :return:
     """
-    print('TODO')
+    for year in task_infos["years"]:
+        data_files = glob.glob(os.path.join(ddir, str(year), '1-Year') + f'/*{task}.csv')
+        for d in data_files:
+            df = pd.read_csv(d, sep=',')
+            for c in list(df.columns):
+                print(df[c].isnull().sum())
 
 
 if __name__ == "__main__":
@@ -92,8 +97,11 @@ if __name__ == "__main__":
     if args.mode == 'download':
         download_data()
     elif args.mode == 'rawdata_to_task':
-        for t in ["ACSHealthInsurance"]: #task_infos["task_names"]:
+        for t in ["ACSHealthInsurance"]:
             for y in task_infos["years"]:
                 for s in task_infos["states"]:
                     print(t, y, s)
                     rawdata_to_task(t, s, y)
+    elif args.mode == 'check_missings':
+        for task in task_infos["task_names"]:
+            check_missing_values_presence(task)
