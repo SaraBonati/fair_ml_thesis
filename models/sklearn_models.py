@@ -13,6 +13,8 @@ import pandas as pd
 import os
 import glob
 import json
+import re
+from pathlib import Path
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import LinearSVC
 from sklearn.linear_model import LogisticRegression
@@ -344,6 +346,9 @@ if __name__ == "__main__":
     with open(json_file_path, 'r') as j:
         task_infos = json.loads(j.read())
 
+    # define regex pattern to extract names of all test states
+    test_state_pattern = re.compile(r"_([^_]+)_")
+
     if args.mode == "test":
         print(task_infos["tasks"][task_infos["task_col_map"][args.task]]["target"])
 
@@ -366,7 +371,8 @@ if __name__ == "__main__":
                 test_states = []
                 test_data_file_paths = [f for f in data_file_paths if select_state_train not in f]
                 for p in range(len(test_data_file_paths)):
-                    test_states.append(os.path.split(test_data_file_paths[p])[1][5:7])
+                    test_path = Path(test_data_file_paths[p])
+                    test_states.append(test_state_pattern.findall(test_path.name)[-1])
                     test_df = pd.read_csv(test_data_file_paths[p], sep=',', index_col=0)
                     test_dfs.append(test_df)
 
@@ -404,7 +410,8 @@ if __name__ == "__main__":
                     for y in years_to_test]
 
                 for p in range(len(test_data_file_paths)):
-                    test_states.append(os.path.split(test_data_file_paths[p])[1][5:7])
+                    test_path = Path(test_data_file_paths[p])
+                    test_states.append(test_state_pattern.findall(test_path.name)[-1])
                     test_df = pd.read_csv(test_data_file_paths[p], sep=',', index_col=0)
                     test_dfs.append(test_df)
 
