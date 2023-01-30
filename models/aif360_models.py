@@ -64,6 +64,7 @@ class Model:
         self.cat_columns = cat_columns
         self.num_columns = num_columns
         self.target_col = target_col
+        print("TARGET COL: ",self.target_col)
         # year chosen for the spatial context (if spatial context was selected)
         self.spatial_year = spatial_year
         # training year (if temporal context was selected)
@@ -267,7 +268,8 @@ class Model:
                 metricss[clf_name][self.test_years[t]] = {}
 
                 # create testing data
-                self.X_test_to_preprocess, self.y_test = self.test_dfs[t][self.cols[:-1]], self.test_dfs[t]['ESR']
+                self.X_test_to_preprocess, self.y_test = self.test_dfs[t][self.cols[:-1]], self.test_dfs[t][
+                    self.target_col]
                 print(self.y_test)
                 # create y_test in the form of dataframe indexed vby protected attributes
                 # (for metric calculation purposes)
@@ -373,7 +375,7 @@ if __name__ == "__main__":
             data_file_paths.sort()
 
             for select_state_train in task_infos["states"][1:]:
-                print("TRAIN STATE: ",select_state_train)
+                print("YEAR ",select_year," TRAIN STATE: ",select_state_train)
                 # load train data
                 train_df = pd.read_csv(os.path.join(ddir, str(select_year), '1-Year',
                                                     f'{str(select_year)}_{select_state_train}_{args.task}.csv'),
@@ -389,7 +391,9 @@ if __name__ == "__main__":
                     test_df = pd.read_csv(test_data_file_paths[p], sep=',', index_col=0)
                     test_dfs.append(test_df)
 
-                M = Model(train_df, test_dfs, args.task, task_infos['tasks'][1]['cat_columns'],
+                M = Model(train_df, test_dfs, args.task, task_infos['tasks'][task_infos['task_col_map'][args.task]][
+                                                                                 'cat_columns'],
+                          #task_infos['tasks'][1]['cat_columns'],
                           task_infos['tasks'][1]['num_columns'],
                           task_infos["tasks"][task_infos["task_col_map"][args.task]]["target"],
                           spatial_year=select_year,
@@ -428,7 +432,8 @@ if __name__ == "__main__":
                     test_df = pd.read_csv(test_data_file_paths[p], sep=',', index_col=0)
                     test_dfs.append(test_df)
 
-                M = Model(train_df, test_dfs, args.task, task_infos['tasks'][1]['cat_columns'],
+                M = Model(train_df, test_dfs, args.task, task_infos['tasks'][task_infos['task_col_map'][args.task]][
+                                                                                 'cat_columns'],
                           task_infos['tasks'][1]['num_columns'],
                           task_infos["tasks"][task_infos["task_col_map"][args.task]]["target"],
                           temporal_train_year=select_year,
