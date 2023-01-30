@@ -1,7 +1,7 @@
 # MSc Data Science master thesis project 
 # The impact of spatial and temporal context in fairness-aware  machine learning
 
-This repository includes all scripts used in the MSc Data Science master thesis project.
+This repository includes all scripts used in the MSc Data Science master thesis project (currently in progress).
 
 ## Virtual environment
 ```shell
