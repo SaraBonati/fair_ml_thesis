@@ -13,6 +13,7 @@ from sklearn.metrics import homogeneity_score, completeness_score, v_measure_sco
     adjusted_mutual_info_score, silhouette_score
 from sklearn.preprocessing import StandardScaler
 from kmodes.kmodes import KModes
+from kmodes.kprototypes import KPrototypes
 
 
 class Cluster:
@@ -53,8 +54,7 @@ class Cluster:
 
         final_features = ["AGEP", "SCHL", "MAR", "CIT", "SEX", "RAC1P", "STATE"]
         X = data[final_features]
-        X.replace([np.inf, -np.inf,np.nan], 999, inplace=True)
-
+        X.replace([np.inf, -np.inf, np.nan], 999, inplace=True)
 
         # now dimensionality reduction
         transformed_data = prince.FAMD(n_components=3,
@@ -81,29 +81,87 @@ class Cluster:
 
         data = pd.concat(all_dfs, ignore_index=True)
         X = data[["AGEP", "SCHL", "MAR", "CIT", "SEX", "RAC1P", "STATE"]]
-        # first standard scaler
-        standard_scaler = StandardScaler()
-        X[["AGEP"]] = standard_scaler.fit_transform(X[["AGEP"]])
-        true_labels = X[["STATE"]]
+        # categorize the age column
+        age_category = pd.cut(X.AGEP, bins=[0, 2, 14, 18, 30, 60, 80, 100], labels=['Toddler', 'Child', 'Teenager',
+                                                                                'Young Adult', 'Adult',
+                                                                                'Older Adult', 'Elderly'])
+        X.insert(0, 'AGE_CAT', age_category)
+        X.drop(columns=['AGEP'], inplace=True)
+
+        for i in ["SCHL", "MAR", "CIT", "SEX", "RAC1P"]:
+            # first remove the trailing zero by turning categorical numbers into ints
+            X.loc[:, i] = X[i].astype(np.int64)
 
         cost = []
-        K = range(3, 7)
+        K = range(3, 10)
         for num_clusters in list(K):
-            kmode = KModes(n_clusters=num_clusters, init="random", n_init=5, verbose=1)
-            clusters = kmode.fit_predict(X, categorical=[1, 2, 3, 4, 5, 6])
+            kmode = KModes(n_clusters=num_clusters, init="Cao", n_init=10, verbose=1)
+            clusters = kmode.fit_predict(X)
             cost.append(kmode.cost_)
             # add final prediction to dataset
             X['PREDICTION'] = clusters
-            X.to_csv(os.path.join(tdir, str(year), task, f"{task}_{str(year)}_kmodes.csv"))
 
+            # save final file including predictions
+            if not os.path.exists(os.path.join(tdir, str(year), task)):
+                os.makedirs(os.path.join(tdir, str(year), task))
+            X.to_csv(os.path.join(tdir, str(year), task, f"{task}_{str(year)}_kmodes_{num_clusters}.csv"))
+
+        # elbow curve
         plt.plot(K, cost, 'bx-')
         plt.xlabel('No. of clusters')
         plt.ylabel('Cost')
-        plt.title('Elbow Method For Optimal k')
+        plt.title('Kmodes - Elbow Method For Optimal k')
         if not os.path.exists(os.path.join(tdir, str(year), task)):
             os.makedirs(os.path.join(tdir, str(year), task))
-            plt.savefig(os.path.join(tdir, str(year), task, f"{task}_{str(year)}_elbow_kmodes.png"),
-                        format='png', dpi=300)
+        plt.savefig(os.path.join(tdir, str(year), task, f"{task}_{str(year)}_elbow_kprototypes.png"),
+                    format='png', dpi=300)
+
+    def apply_clustering_kproto(self, task: str, year: int):
+        """
+        This function applies clustering kmodes, meaning we turn the columns of interest
+        for each state and year into pandas categories and proceed to use a clustering method
+        for categorical variables
+        :return:
+        """
+        all_dfs = []
+        for file_path in self.data_paths:
+            df = pd.read_csv(file_path, sep=",")
+            df['STATE'] = os.path.split(file_path)[1][5:7]
+            all_dfs.append(df)
+
+        data = pd.concat(all_dfs, ignore_index=True)
+        X = data[["AGEP", "SCHL", "MAR", "CIT", "SEX", "RAC1P", "STATE"]]
+        # first standard scaler
+        standard_scaler = StandardScaler()
+        X[["AGEP"]] = standard_scaler.fit_transform(X[["AGEP"]])
+        for i in ["SCHL", "MAR", "CIT", "SEX", "RAC1P"]:
+            # first remove the trailing zero by turning categorical numbers into ints
+            X.loc[:, i] = X[i].astype(np.int64)
+        # true_labels = X[["STATE"]]
+
+        cost = []
+        K = range(3, 10)
+        for num_clusters in list(K):
+            kproto = KPrototypes(n_clusters=num_clusters, init="Cao", n_init=10, verbose=1)
+            clusters = kproto.fit_predict(X, categorical=[1, 2, 3, 4, 5, 6])
+            cost.append(kproto.cost_)
+            # add final prediction to dataset
+            X['PREDICTION'] = clusters
+
+            # save final file including predictions
+            if not os.path.exists(os.path.join(tdir, str(year), task)):
+                os.makedirs(os.path.join(tdir, str(year), task))
+            X.to_csv(os.path.join(tdir, str(year), task, f"{task}_{str(year)}_kproto_{num_clusters}.csv"))
+
+        # elbow curve
+        plt.plot(K, cost, 'bx-')
+        plt.xlabel('No. of clusters')
+        plt.ylabel('Cost')
+        plt.title('Kprototypes - Elbow Method For Optimal k')
+        if not os.path.exists(os.path.join(tdir, str(year), task)):
+            os.makedirs(os.path.join(tdir, str(year), task))
+        plt.savefig(os.path.join(tdir, str(year), task, f"{task}_{str(year)}_elbow_kprototypes.png"),
+                    format='png', dpi=300)
 
     def apply_clustering_kmeans(self, task: str, year: int):
         """
@@ -233,4 +291,8 @@ if __name__ == "__main__":
     if args.method == "kmeans":
         C.apply_clustering_kmeans(args.task, args.year)
     elif args.method == "kmodes":
-        C.apply_clustering_kmodes(args.task, args.year)
+        for y in [2014,2015,2016,2017,2018]:
+            # C.apply_clustering_kmodes(args.task, args.year)
+
+            C.apply_clustering_kproto(args.task, y)
+            C.apply_clustering_kmodes(args.task, y)
