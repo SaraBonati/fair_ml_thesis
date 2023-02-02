@@ -13,7 +13,9 @@ json_file_path = os.path.join(wdir, 'tasks_metadata.json')
 with open(json_file_path, 'r') as j:
     task_infos = json.loads(j.read())
 
-
+#############################################
+# Functions related to download of data
+#############################################
 def download_data(survey_year: int):
     """
     Download data to folder in local system

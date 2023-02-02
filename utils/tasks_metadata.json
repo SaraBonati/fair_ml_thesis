@@ -50,7 +50,8 @@
                         "POBP",
                         "RELP",
                         "SEX",
-                        "RAC1P"
+                        "RAC1P",
+                        "PINCP"
                     ],
         "num_columns": ["AGEP",
                         "WKHP"
@@ -59,7 +60,7 @@
                       "COW Class of worker",
                       "SCHL Education status",
                       "MAR Marital status",
-                      "OCCP Occupation",
+                      "OCCP Occupation code",
                       "POPB Place of Birth",
                       "RELP Relationship",
                       "WKHP Number of hours/week spent working",
@@ -103,7 +104,8 @@
                       "DEYE",
                       "DREM",
                       "SEX",
-                      "RAC1P"
+                      "RAC1P",
+                      "ESR"
                       ],
         "num_columns": ["AGEP"
                     ],
@@ -159,6 +161,27 @@
                     "FER",
                     "HINS2"
                 ],
+        "cat_columns": ["SCHL",
+                        "MAR",
+                        "SEX",
+                        "DIS",
+                        "ESP",
+                        "CIT",
+                        "MIG",
+                        "MIL",
+                        "ANC",
+                        "NATIVITY",
+                        "DEAR",
+                        "DEYE",
+                        "DREM",
+                        "RAC1P",
+                        "ESR",
+                        "ST",
+                        "FER"
+                      ],
+        "num_columns": ["AGEP",
+                        "PINCP"
+                        ],
         "columns_desc": ["AGEP Age of person",
                     "SCHL Education status",
                     "MAR Marital status",

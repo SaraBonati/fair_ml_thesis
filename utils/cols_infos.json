@@ -11,7 +11,7 @@
     "1": "Insured",
     "2": "Not Insured"
   },
-  "RAC1P": {
+  "RAC1P_r": {
     "1": "White",
     "2": "Black/African American",
     "3": "American Indian",
@@ -22,7 +22,7 @@
     "8": "Some Other Race",
     "9": "Two or More Races"
   },
-  "RAC1P_r": {
+  "RAC1P": {
     "1": "White",
     "2": "Black/African American",
     "3": "Other"
@@ -121,5 +121,9 @@
     "0": "NA - less than 5 years old",
     "1" :"Yes",
     "2" :"No"
+  },
+  "PINCP": {
+    "0": "< 50k/year",
+    "1" :"> 50k/year"
   }
 }
