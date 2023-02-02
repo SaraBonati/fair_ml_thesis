@@ -1,10 +1,13 @@
+import numpy as np
 import pandas as pd
 import os
+import re
 import json
 import argparse
 import plotly.express as px
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
+import streamlit as st
 
 wdir = os.getcwd()
 ddir = os.path.join(os.path.split(wdir)[0], "fair_ml_thesis_data")
@@ -27,6 +30,32 @@ def preprocess_healthinsurance(df):
     return df
 
 
+def categorize(df, cat_columns):
+    """
+    This function turns a column in pandas dataframe to int first, and then to category
+    :param df:
+    :param cat_columns:
+    :return:
+    """
+
+    for c in cat_columns:
+        df[c] = df[c].astype(np.int64)
+        df[c] = df[c].astype('category')
+
+def map_int_to_cat(df, cols_infos, cols):
+    """
+    This function, given a dataframe and a dict containing number to category mappings,
+    turns the pandas category column with numerical values to columns displaying the category corresponding to each
+    number. The resulting dataframe is returned
+    :param df:
+    :param cols_infos:
+    :return:
+    """
+    for c in cols:
+        if c in list(cols_infos.keys()) and c not in ["ESR","HINS2"]:
+            df[c] = df[c].map(cols_infos[c])
+    return df
+
 def merge_dataframes_eda(paths: list, task: str):
     """
     given a list of paths to dataframes, this function creates a state specific dataframe with all
@@ -48,7 +77,7 @@ def merge_dataframes_eda(paths: list, task: str):
     return pd.concat(dfs, ignore_index=True)
 
 
-def make_mapplot(df, metric: str, title: str, context: str, colors: str = "Viridis_r"):
+def make_mapplot(df, metric: str, title: str, context: str, state_col: str, colors: str = "Viridis_r"):
     """
     Creates a choropleth map plot that is animated showing yearly progression
     of specified metric
@@ -56,12 +85,14 @@ def make_mapplot(df, metric: str, title: str, context: str, colors: str = "Virid
     :param metric: name of variable to display in animated map plot
     :param title: title of plot
     :param context: spatial or temporal
+    :param state_col: specifies the name of the df column with state codes
     :param colors: name of colormap to use in plot
+
     :return:
     """
     if context == "Temporal":
         fig = px.choropleth(df,
-                            locations='state_code',
+                            locations=state_col,
                             animation_frame="year",
                             color=metric,
                             color_continuous_scale=colors,
@@ -70,7 +101,7 @@ def make_mapplot(df, metric: str, title: str, context: str, colors: str = "Virid
                             height=1300)
     elif context == "Spatial":
         fig = px.choropleth(df,
-                            locations='state',
+                            locations=state_col,
                             color=metric,
                             color_continuous_scale=colors,
                             locationmode='USA-states',
@@ -94,7 +125,7 @@ def make_protected_plots(df, df_all_years, target_name: str):
                   values='SEX',
                   names='sex_class',
                   color='sex_class',
-                  color_discrete_map={'Female': 'coral', 'Male': 'teal'})
+                  color_discrete_map={2: 'coral', 1: 'teal'}) # were "female" and "male" before
     fig1.update_traces(textposition='inside', textinfo='percent+label')
 
     # race
@@ -104,19 +135,48 @@ def make_protected_plots(df, df_all_years, target_name: str):
                   names='race',
                   color='race',
                   color_discrete_map={
-                      "White": "Crimson",
-                      "Black/African American": "SteelBlue",
-                      "American Indian": "Silver",
-                      "Alaska Native": "PowderBlue",
-                      "American Indian and Alaska Native tribes": "Chocolate",
-                      "Asian": "DarkViolet",
-                      "Native Hawaiian and Other Pacific Islander": "LimeGreen",
-                      "Some Other Race": "DarkSlateGrey",
-                      "Two or More Races": "DarkSeaGreen"
+                      1: "Crimson",
+                      2: "SteelBlue",
+                      3: "DarkViolet"
                   })
+                  # color_discrete_map={
+                  #     "White": "Crimson",
+                  #     "Black/African American": "SteelBlue",
+                  #     "American Indian": "Silver",
+                  #     "Alaska Native": "PowderBlue",
+                  #     "American Indian and Alaska Native tribes": "Chocolate",
+                  #     "Asian": "DarkViolet",
+                  #     "Native Hawaiian and Other Pacific Islander": "LimeGreen",
+                  #     "Some Other Race": "DarkSlateGrey",
+                  #     "Two or More Races": "DarkSeaGreen"
+                  # })
     fig2.update_traces(textposition='inside', textinfo='percent+label')
 
-    return fig1, fig2
+    # race detailed
+    df_percent = df['RAC1P_r'].value_counts(normalize=True).reset_index().rename(columns={'index': 'race'})
+    fig3 = px.pie(df_percent,
+                  values='RAC1P_r',
+                  names='race',
+                  color='race',
+                  color_discrete_map={
+                      1: "Crimson",
+                      2: "SteelBlue",
+                      3: "DarkViolet"
+                  })
+                  # color_discrete_map={
+                  #     "White": "Crimson",
+                  #     "Black/African American": "SteelBlue",
+                  #     "American Indian": "Silver",
+                  #     "Alaska Native": "PowderBlue",
+                  #     "American Indian and Alaska Native tribes": "Chocolate",
+                  #     "Asian": "DarkViolet",
+                  #     "Native Hawaiian and Other Pacific Islander": "LimeGreen",
+                  #     "Some Other Race": "DarkSlateGrey",
+                  #     "Two or More Races": "DarkSeaGreen"
+                  # })
+    fig3.update_traces(textposition='inside', textinfo='percent+label')
+
+    return fig1, fig2, fig3
 
 
 def make_demographic_plots(df, df_all_years, target_name: str):
@@ -138,7 +198,7 @@ def make_demographic_plots(df, df_all_years, target_name: str):
                         height=800)
 
     # all years
-    fig2 = px.histogram(df_all_years, x="RAC1P_r", y=target_name,
+    fig2 = px.histogram(df_all_years, x="RAC1P", y=target_name,
                         facet_row=target_name,
                         facet_col="YEAR",
                         color='SEX',
@@ -148,23 +208,26 @@ def make_demographic_plots(df, df_all_years, target_name: str):
                         )
     # AGEP
     # one year only
-    fig3 = px.box(df, x="RAC1P_r", y="AGEP", facet_col=target_name,
+    fig3 = px.box(df, x="RAC1P", y="AGEP", facet_col=target_name,
                   color='SEX',
                   color_discrete_map={'Female': 'coral', 'Male': 'teal'},
                   boxmode='group',
-                  width=800,
-                  height=400)
+                  width=1200,
+                  height=800)
 
     # all years
-    fig4 = px.box(df_all_years, x="RAC1P_r", y="AGEP", facet_row=target_name,
+    fig4 = px.box(df_all_years, x="RAC1P", y="AGEP", facet_row=target_name,
                   facet_col="YEAR",
                   color='SEX',
                   color_discrete_map={'Female': 'coral', 'Male': 'teal'},
-                  boxmode='group')
+                  boxmode='group',
+                  width=1200,
+                  height=800
+                  )
     # SCHL
     # one year
     fig5 = px.histogram(df, x="SCHL", y=target_name,
-                        facet_col="RAC1P_r",
+                        facet_col="RAC1P",
                         color='SEX',
                         category_orders={"SCHL": [
                             "No schooling completed",
@@ -200,7 +263,7 @@ def make_demographic_plots(df, df_all_years, target_name: str):
                         height=800)
     # all years
     fig6 = px.histogram(df_all_years, x="SCHL", y=target_name,
-                        facet_row="RAC1P_r",
+                        facet_row="RAC1P",
                         facet_col="YEAR",
                         color='SEX',
                         category_orders={"SCHL": [
@@ -239,7 +302,7 @@ def make_demographic_plots(df, df_all_years, target_name: str):
     return fig1, fig2, fig3, fig4, fig5, fig6
 
 
-def plot_ml_results_spatial(result_paths):
+def plot_ml_results_spatial(result_paths: list):
     """
 
     :param result_paths: list of paths to results (different files for different classifiers)
@@ -269,6 +332,43 @@ def plot_ml_results_spatial(result_paths):
     return fig
 
 
+def map_plot_ml_results_spatial(result_paths_sklearn: list, result_paths_aif: list):
+    """
+
+    :param result_paths_sklearn:
+    :param result_paths_aif:
+    :return:
+    """
+
+    dfs = []
+    for p in range(len(result_paths_sklearn)):
+        df = pd.read_csv(result_paths_sklearn[p], header=0, sep=',')
+        state = os.path.split(result_paths_sklearn[p])[1][:2]
+        start, end = f'{state}_test_all_', '.csv'
+        df['CLASSIFIER'] = re.search('%s(.*)%s' % (start, end), result_paths_sklearn[p]).group(1)
+        df['CLASSIFIER_TYPE'] = "normal"
+        dfs.append(df)
+    for p in range(len(result_paths_aif)):
+        df = pd.read_csv(result_paths_aif[p], header=0, sep=',')
+        state = os.path.split(result_paths_aif[p])[1][8:10]
+        start, end = f'spatial_{state}_test_all_', '.csv'
+        df['CLASSIFIER'] = re.search('%s(.*)%s' % (start, end), result_paths_aif[p]).group(1)
+        df['CLASSIFIER_TYPE'] = "fairness_aware"
+        dfs.append(df)
+
+    final_df = pd.concat(dfs)
+    fig = px.box(final_df, x="CLASSIFIER", y="accuracy", color='CLASSIFIER_TYPE', points="all",
+                 width=1900)
+    fig.update_layout(legend=dict(
+        orientation="h",
+        yanchor="bottom",
+        y=1.02,
+        xanchor="right",
+        x=1
+    ))
+    return fig
+
+
 def plot_ml_results_temporal(result_path):
     """
 
@@ -279,7 +379,8 @@ def plot_ml_results_temporal(result_path):
     df = pd.read_csv(result_path, sep=',')
     df.rename(columns={'Unnamed: 0': 'clf', 'Unnamed: 1': 'year'}, inplace=True)
 
-    fig = px.bar(df, x="year", y="accuracy", color="clf", barmode="group")
+    #fig = px.bar(df, x="year", y="accuracy", color="clf", barmode="group")
+    fig = px.line(df, x="year", y="accuracy", color="clf",markers=True)
     # Update xaxis properties
     fig.update_xaxes(title_text="Year")
     # Update yaxis properties
@@ -354,7 +455,7 @@ def eda_metrics_usa(task: str, overwrite: bool = False):
     """
 
     if os.path.isfile(os.path.join(ddir, 'results', 'metrics', f'metrics_all_usa_{task}.tsv')) and not overwrite:
-        metrics = pd.read_csv(os.path.join(ddir, 'results', 'metrics', f'metrics_all_usa_{task}.tsv'), sep=',')
+        metrics = pd.read_csv(os.path.join(ddir, 'results', 'metrics', f'metrics_all_usa_{task}.tsv'), sep='\t')
         return metrics
 
     else:
