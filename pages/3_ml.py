@@ -16,7 +16,8 @@ import streamlit as st
 import os
 import glob
 import json
-from utils.eda_utils import plot_ml_results_spatial, plot_ml_results_temporal, make_mapplot
+from utils.eda_utils import plot_ml_results_spatial, plot_ml_results_temporal,\
+    make_mapplot, map_plot_ml_results_spatial
 
 # directory management
 wdir = os.getcwd()  # working directory
@@ -36,6 +37,13 @@ st.set_page_config(
 )
 st.markdown("# ML Analysis Results")
 st.sidebar.markdown("# ML Analysis Results")
+st.sidebar.markdown("In this page we show the results of the machine learning analysis applied to the classification "
+                    "tasks "
+            "across the spatial and temporal context. The goal is to compare the performance of normal classifiers, "
+            "that do not receive constraints over the protected attributes VS the performance of fairness-aware "
+            "classifiers. We expect to see a difference in performance accuracy, with normal classifiers having more "
+            "room for improvement in the target class predictions and with fairness-aware classifiers showing better "
+            "fairness metrics performance.")
 
 ml_form = st.form("ML Results form")
 # get task, state and context to visualize
@@ -49,32 +57,55 @@ if select_context == 'Spatial':
                                                                            max(task_infos['years'])+1))
     # select data paths according to year selection
     # ddir -> C:\Users\sarab\Desktop\Data_Science_MSc\master_thesis\thesis_code\results\ACSEmployment
+    # or C:\Users\sarab\Desktop\Data_Science_MSc\master_thesis\thesis_code\results
+    # result paths (sklearn)
     results_sklearn_paths = glob.glob(
         os.path.join(r"C:\Users\sarab\Desktop\Data_Science_MSc\master_thesis\thesis_code\results",
                      select_task, str(select_year), 'sklearn', select_state) + f'/{select_state}_test_all_*.csv')
     results_sklearn_paths.sort()
+    df_sklearn = pd.read_csv(results_sklearn_paths[0], header=0, sep=',')
+    df_sklearn.rename(columns={'Unnamed: 0': 'state'}, inplace=True)
 
-    df = pd.read_csv(results_sklearn_paths[0], header=0, sep=',')
-    df.rename(columns={'Unnamed: 0': 'state'}, inplace=True)
-    st.write(df)
+    # result paths (aif360)
+    results_aif360_paths = glob.glob(
+        os.path.join(r"C:\Users\sarab\Desktop\Data_Science_MSc\master_thesis\fair_ml_thesis_data\results",
+                     select_task, str(select_year), 'aif360', select_state) + f'/{select_context}'
+                                                                              f'_{select_state}_test_all_*.csv')
+    results_aif360_paths.sort()
+    df_aif = pd.read_csv(results_aif360_paths[0], header=0, sep=',')
+    df_aif.rename(columns={'Unnamed: 0': 'state'}, inplace=True)
+
+    st.markdown(f"### Normal classifiers results")
+    st.dataframe(df_sklearn, use_container_width=True)
+    st.markdown(f"### Fairness-aware classifiers results")
+    st.dataframe(df_aif, use_container_width=True)
 
     st.markdown(f"## Figure 1 - {select_state} as training data, results when tested on all other us states")
 
     # accuracy
-    fig = plot_ml_results_spatial(results_sklearn_paths)
-    st.plotly_chart(fig)
+    fig_map = make_mapplot(df_sklearn, "accuracy", "Accuracy (normal classifiers)",
+                           select_context,
+                           "state", "blues")
+    st.write("TODO: expand to show all classifiers with mapplot")
+    st.plotly_chart(fig_map)
+    # fig = plot_ml_results_spatial(results_sklearn_paths)
+    # st.plotly_chart(fig)
+
+    fig_box = map_plot_ml_results_spatial(results_sklearn_paths,results_aif360_paths)
+    st.plotly_chart(fig_box)
+
 
     # statistical parity + disparate impact ratio (sex)
     st.markdown(f"### SPD (SEX) - {select_state} as training data (closer to zero is better)")
-    st.plotly_chart(make_mapplot(df, "sex_spd", "SPD (SEX)", select_context, "blues"))
+    st.plotly_chart(make_mapplot(df_sklearn, "sex_spd", "SPD (SEX)", select_context,"state", "blues"))
     st.markdown(f"### DIR (SEX) - {select_state} as training data (higher is better)")
-    st.plotly_chart(make_mapplot(df, "sex_dir", "DIR (SEX)", select_context, "blues"))
+    st.plotly_chart(make_mapplot(df_sklearn, "sex_dir", "DIR (SEX)", select_context,"state", "blues"))
 
     # statistical parity + disparate impact ratio (race)
     st.markdown(f"### SPD (RACE) - {select_state} as training data (closer to zero is better)")
-    st.plotly_chart(make_mapplot(df, "rac_spd", "SPD (RACE)", select_context, "reds"))
+    st.plotly_chart(make_mapplot(df_sklearn, "rac_spd", "SPD (RACE)", select_context,"state", "reds"))
     st.markdown(f"### DIR (RACE) - {select_state} as training data (higher is better)")
-    st.plotly_chart(make_mapplot(df, "rac_dir", "DIR (RACE)", select_context, "reds"))
+    st.plotly_chart(make_mapplot(df_sklearn, "rac_dir", "DIR (RACE)", select_context,"state", "reds"))
 
 if select_context == 'Temporal':
     select_year = st.slider('Which year do you want to use?', 2014, 2018)
