@@ -106,6 +106,19 @@ class Model:
         # define cross-validation strategy
         self.cv_set = {'KFold': KFold(n_splits=5, shuffle=True, random_state=self.seed)}
 
+    @staticmethod
+    def fix_rac1p_healthinsurance(df):
+        """
+        This statis method fixes the race columns from ACSHealthinsurance data to one RAC1P column,
+        in line with the other classification tasks
+        :param df:
+        :return:
+        """
+        df['RAC1P'] = df[['RACAIAN', 'RACASN', 'RACBLK', 'RACNH', 'RACPI', 'RACSOR', 'RACWHT']].idxmax(axis=1)
+        race_codes = {'RACAIAN': 5, 'RACASN': 6, 'RACBLK': 2, 'RACNH': 7, 'RACPI': 7, 'RACSOR': 8, 'RACWHT': 1}
+        df['RAC1P'] = df['RAC1P'].map(race_codes)
+        df['RAC1P'] = pd.to_numeric(df['RAC1P'])
+        df.drop(['RACAIAN', 'RACASN', 'RACBLK', 'RACNH', 'RACPI', 'RACSOR', 'RACWHT'], axis=1, inplace=True)
     def preprocess(self, df):
         """
         This method creates a pre-processing pipeline to be used on the training and testing data.
@@ -119,12 +132,12 @@ class Model:
             df (pd.Dataframe): the dataframe on which to apply preprocessing
         """
 
-        df['RAC1P'] = pd.to_numeric(df['RAC1P'])
         # take care of special case of RAC1P column for ACSHealthInsurance task
-        if self.task == "ACSHealthInsurance":
+        if self.task == "ACSHealthInsurance" and 'RAC1P' not in list(df.columns):
             df['RAC1P'] = df[['RACAIAN', 'RACASN', 'RACBLK', 'RACNH', 'RACPI', 'RACSOR', 'RACWHT']].idxmax(axis=1)
             race_codes = {'RACAIAN': 5, 'RACASN': 6, 'RACBLK': 2, 'RACNH': 7, 'RACPI': 7, 'RACSOR': 8, 'RACWHT': 1}
             df['RAC1P'] = df['RAC1P'].map(race_codes)
+            df['RAC1P'] = pd.to_numeric(df['RAC1P'])
             df.drop(['RACAIAN', 'RACASN', 'RACBLK', 'RACNH', 'RACPI', 'RACSOR', 'RACWHT'], axis=1, inplace=True)
         # recode RAC1P values for all tasks
         df.loc[df['RAC1P'] > 2, 'RAC1P'] = 3
@@ -178,6 +191,12 @@ class Model:
                 # create testing data
                 self.X_test_to_preprocess, self.y_test = self.test_dfs[t][self.cols[:-1]], self.test_dfs[t][
                     self.target_col]
+
+                # solve X test for health insurance task TODO: reformat later
+                if self.task=='ACSHealthInsurance':
+                    self.fix_rac1p_healthinsurance(self.X_test_to_preprocess)
+                print(self.X_test_to_preprocess.columns)
+
                 # create y_test in the form of dataframe indexed
                 # by protected attributes (for metric calculation purposes)
                 self.y_test_df = self.X_test_to_preprocess[['SEX', 'RAC1P']]
@@ -271,6 +290,11 @@ class Model:
                 self.X_test_to_preprocess, self.y_test = self.test_dfs[t][self.cols[:-1]], self.test_dfs[t][
                     self.target_col]
                 print(self.y_test)
+
+                if self.task=='ACSHealthInsurance':
+                    self.fix_rac1p_healthinsurance(self.X_test_to_preprocess)
+                print(self.X_test_to_preprocess.columns)
+
                 # create y_test in the form of dataframe indexed vby protected attributes
                 # (for metric calculation purposes)
                 self.y_test_df = self.X_test_to_preprocess[['SEX', 'RAC1P']]
