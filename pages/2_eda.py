@@ -203,12 +203,13 @@ if submitted:
     #############################################
     # ALL US states figures
     #############################################
-    st.markdown(f"### ALL US States Metrics")
-    st.markdown(f"Below you can visualize some metrics on all US states data in year {select_year}. "
-                f"The metrics displayed are fairness metrics, and indicate "
-                f"NOTE: this data might take a bit to load")
-
     if show_all_usa:
+
+        st.markdown(f"### ALL US States Metrics")
+        st.markdown(f"Below you can visualize some metrics on all US states data in year {select_year}. "
+                    f"The metrics displayed are fairness metrics, and indicate "
+                    f"NOTE: this data might take a bit to load")
+
         # load data file (or calculate on spot)
         metrics = eda_metrics_usa(select_task)
 

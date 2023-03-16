@@ -14,14 +14,18 @@ import os
 import glob
 import json
 import re
+import pickle
 from pathlib import Path
+from xgboost import XGBClassifier
 from sklearn.preprocessing import StandardScaler
-from sklearn.svm import LinearSVC
+from sklearn.svm import LinearSVC,SVC
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import KFold
-from sklearn.metrics import accuracy_score, balanced_accuracy_score, precision_score, recall_score
+from sklearn.metrics import accuracy_score, balanced_accuracy_score, precision_score, recall_score, roc_curve
 from sklearn.ensemble import RandomForestClassifier
-from aif360.sklearn.metrics import statistical_parity_difference, disparate_impact_ratio
+from aif360.sklearn.metrics import statistical_parity_difference, disparate_impact_ratio, \
+    average_odds_difference, equal_opportunity_difference
+
 
 
 #########################
@@ -91,14 +95,10 @@ class Model:
         self.clf_set = {'LogReg': LogisticRegression(max_iter=4000, random_state=self.seed),
                         'LinearSVC': LinearSVC(C=1, max_iter=4000, random_state=self.seed),
                         'RandomForest': RandomForestClassifier(max_depth=2, random_state=self.seed),
-                        'LogReg_balanced': LogisticRegression(max_iter=4000, class_weight='balanced',
-                                                              random_state=self.seed),
-                        'LinearSVC_balanced': LinearSVC(C=1, max_iter=4000, class_weight='balanced',
-                                                        random_state=self.seed),
-                        'RandomForest_balanced': RandomForestClassifier(max_depth=2, random_state=self.seed,
-                                                                        class_weight='balanced')}
+                        'XGBoost': XGBClassifier(objective='binary:hinge', enable_categorical=False)
+                        }
         # define cross-validation strategy
-        self.cv_set = {'KFold': KFold(n_splits=5, shuffle=True, random_state=self.seed)}
+        self.cv_object = KFold(n_splits=10, shuffle=True, random_state=self.seed)
 
     def preprocess(self, df):
         """
@@ -154,9 +154,24 @@ class Model:
             metricss[clf_name] = {}
 
             # fit on training data (one state)
-            # for train, test in cv_object.split(bold_masked,**cv_object_args):
+            kfold_metrics = {}
+            kfold_metrics["accuracy"] = []
+            # k fold validation for training state
             self.X_train = self.preprocess(self.train_df)
-            clfier.fit(self.X_train, self.y_train)
+
+            for train_indices, val_indices in self.cv_object.split(self.X_train):
+                #clfier.fit(self.X_train, self.y_train)
+
+                train_X = self.X_train.iloc[train_indices]
+                val_X = self.X_train.iloc[val_indices]
+                train_y = self.y_train[train_indices]
+                val_y = self.y_train[val_indices]
+
+                clfier.fit(train_X, train_y)
+                fold_pred = clfier.predict(val_X)
+                kfold_metrics["accuracy"].append(accuracy_score(val_y, fold_pred))
+
+            print("CV training done!")
 
             for t in range(len(self.test_dfs)):
 
@@ -167,8 +182,10 @@ class Model:
                 # by protected attributes (for metric calculation purposes)
                 self.y_test_df = self.X_test_to_preprocess[['SEX', 'RAC1P']]
                 self.y_test_df[self.target_col] = self.y_test
+                self.y_test_df_copy = self.y_test_df.copy()
                 self.y_test_df.set_index(['SEX', 'RAC1P'], inplace=True)
                 self.X_test = self.preprocess(self.X_test_to_preprocess)
+
                 # because some categories might not be present in test data but are still expected by
                 # the classifier after fit check if this is the case, and if yes add these columns to X_test
                 cols_to_fill = set(self.X_train.columns) - set(self.X_test.columns)
@@ -177,11 +194,15 @@ class Model:
                     for c in cols_to_fill:
                         self.X_test[c] = 0
                 self.X_test = self.X_test[self.X_train.columns]
-                # get predictions from classifier
+
+                # get predictions from classifier over test data
                 y_pred = clfier.predict(self.X_test)
+                if clf_name in ["LogReg","LinearSVC"]:
+                    y_pred_p = clfier.decision_function(self.X_test)
 
                 # calculate metrics
                 metricss[clf_name][self.test_states[t]] = {}
+                metricss[clf_name][self.test_states[t]]['train_kfold_accuracy'] = np.mean(kfold_metrics["accuracy"])
                 metricss[clf_name][self.test_states[t]]['accuracy'] = accuracy_score(self.y_test, y_pred)
                 metricss[clf_name][self.test_states[t]]['bal_accuracy'] = balanced_accuracy_score(self.y_test, y_pred)
                 metricss[clf_name][self.test_states[t]]['precision'] = precision_score(self.y_test, y_pred)
@@ -199,6 +220,18 @@ class Model:
                                                                                             priv_group=1,
                                                                                             pos_label=1,
                                                                                             sample_weight=None)
+                metricss[clf_name][self.test_states[t]]['sex_aod'] = average_odds_difference(self.y_test_df,
+                                                                                            y_pred,
+                                                                                            prot_attr='SEX',
+                                                                                            priv_group=1,
+                                                                                            pos_label=1,
+                                                                                            sample_weight=None)
+                metricss[clf_name][self.test_states[t]]['sex_eod'] = equal_opportunity_difference(self.y_test_df,
+                                                                                            y_pred,
+                                                                                            prot_attr='SEX',
+                                                                                            priv_group=1,
+                                                                                            pos_label=1,
+                                                                                            sample_weight=None)
                 metricss[clf_name][self.test_states[t]]['rac_spd'] = statistical_parity_difference(self.y_test_df,
                                                                                                    y_pred,
                                                                                                    prot_attr='RAC1P',
@@ -211,12 +244,67 @@ class Model:
                                                                                             priv_group=1,
                                                                                             pos_label=1,
                                                                                             sample_weight=None)
+                metricss[clf_name][self.test_states[t]]['rac_aod'] = average_odds_difference(self.y_test_df,
+                                                                                            y_pred,
+                                                                                            prot_attr='RAC1P',
+                                                                                            priv_group=1,
+                                                                                            pos_label=1,
+                                                                                            sample_weight=None)
+                metricss[clf_name][self.test_states[t]]['rac_eod'] = equal_opportunity_difference(self.y_test_df,
+                                                                                                  y_pred,
+                                                                                                  prot_attr='RAC1P',
+                                                                                                  priv_group=1,
+                                                                                                  pos_label=1,
+                                                                                                  sample_weight=None)
+
+                if clf_name in ["LogReg","LinearSVC"]:
+                    # save ROC curve information for the specific protected attribute in each test state
+                    ROC_dict = {}
+                    ROC_dict['SEX_fpr'], ROC_dict['SEX_tpr'] = {}, {}
+                    ROC_dict['RAC1P_fpr'], ROC_dict['RAC1P_tpr'] = {}, {}
+
+                    # ROC w.r.t. SEX
+                    indices_male = np.where(self.y_test_df_copy['SEX'] == 1)[0]
+                    indices_female = np.where(self.y_test_df_copy['SEX'] == 2)[0]
+
+                    ROC_dict['SEX_fpr']['male'], ROC_dict['SEX_tpr']['male'], _ = \
+                        roc_curve(self.y_test_df_copy[self.y_test_df_copy['SEX'] == 1][self.target_col],
+                                  y_pred_p[indices_male], pos_label=1)
+                    ROC_dict['SEX_fpr']['female'], ROC_dict['SEX_tpr']['female'], _ = \
+                        roc_curve(self.y_test_df_copy[self.y_test_df_copy['SEX'] == 2][self.target_col],
+                                  y_pred_p[indices_female], pos_label=1)
+
+                    # ROC w.r.t. RAC1P
+                    indices_white = np.where(self.y_test_df_copy['RAC1P'] == 1)[0]
+                    indices_black = np.where(self.y_test_df_copy['RAC1P'] == 2)[0]
+                    indices_other = np.where(self.y_test_df_copy['RAC1P'] == 3)[0]
+
+                    ROC_dict['RAC1P_fpr']['white'], ROC_dict['RAC1P_tpr']['white'], _ = \
+                        roc_curve(self.y_test_df_copy[self.y_test_df_copy['RAC1P'] == 1][self.target_col],
+                                  y_pred_p[indices_white], pos_label=1)
+                    ROC_dict['RAC1P_fpr']['black'], ROC_dict['RAC1P_tpr']['black'], _ = \
+                        roc_curve(self.y_test_df_copy[self.y_test_df_copy['RAC1P'] == 2][self.target_col],
+                                  y_pred_p[indices_black], pos_label=1)
+                    ROC_dict['RAC1P_fpr']['other'], ROC_dict['RAC1P_tpr']['other'], _ = \
+                        roc_curve(self.y_test_df_copy[self.y_test_df_copy['RAC1P'] == 3][self.target_col],
+                                  y_pred_p[indices_other], pos_label=1)
+
+                    # create results folder for the training state if not present already
+                    if not os.path.isdir(
+                            os.path.join(rdir, self.task, str(self.spatial_year), 'sklearn', self.train_state)):
+                        os.makedirs(os.path.join(rdir, self.task, str(self.spatial_year), 'sklearn', self.train_state))
+                    # save to pickle file
+                    with open(os.path.join(rdir, self.task, str(self.spatial_year), 'sklearn', self.train_state,
+                                          f'spatial_{self.train_state}_test_{self.test_states[t]}_{clf_name}.pickle'),
+                              'wb') as handle:
+                        pickle.dump(ROC_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
 
             # save all test states' results
             dfObj = pd.DataFrame.from_dict(metricss[clf_name], orient='index')
             # create results folder for the training state if not present already
-            if not os.path.isdir(os.path.join(rdir, self.task, str(self.spatial_year), 'sklearn', self.train_state)):
-                os.makedirs(os.path.join(rdir, self.task, str(self.spatial_year), 'sklearn', self.train_state))
+            #if not os.path.isdir(os.path.join(rdir, self.task, str(self.spatial_year), 'sklearn', self.train_state)):
+            #    os.makedirs(os.path.join(rdir, self.task, str(self.spatial_year), 'sklearn', self.train_state))
             # save results
             dfObj.to_csv(os.path.join(rdir, self.task, str(self.spatial_year), 'sklearn', self.train_state,
                                       f'spatial_{self.train_state}_test_all_{clf_name}.csv'),
@@ -239,7 +327,6 @@ class Model:
 
             # initialize fairness metrics dict + specifiy clfier results
             metricss[clf_name] = {}
-            print(self.train_df.info())
             # fit on training data (one state)
             # for train, test in cv_object.split(bold_masked,**cv_object_args):
             self.X_train = self.preprocess(self.train_df)
@@ -355,12 +442,15 @@ if __name__ == "__main__":
     # if mode is spatial:
     if args.mode == "spatial":
 
-        for select_year in task_infos["years"]:
+        for select_year in task_infos["years"][:1]:
+            print(f"CURRENT YEAR: {select_year}")
             data_file_paths = glob.glob(
                 os.path.join(ddir, str(select_year), '1-Year') + f'/{str(select_year)}_*_{args.task}.csv')
             data_file_paths.sort()
 
             for select_state_train in task_infos["states"]:
+
+                print(f"CURRENT TRAIN DATA STATE: {select_state_train}")
                 # load train data
                 train_df = pd.read_csv(os.path.join(ddir, str(select_year), '1-Year',
                                                     f'{str(select_year)}_{select_state_train}_{args.task}.csv'),
@@ -396,8 +486,10 @@ if __name__ == "__main__":
             # loop over each state (the training state)
             for select_state_train in task_infos["states"]:
 
-                print(f"Context: {args.mode}, current year: {select_year}, current_state: {select_state_train}")
-                print(f"\n")
+                print(f"Context: {args.mode}, "
+                      f"current year: {select_year}, "
+                      f"current_state: {select_state_train}"
+                      f"\n")
                 train_df = pd.read_csv(os.path.join(ddir, str(select_year), '1-Year',
                                                     f'{str(select_year)}_{select_state_train}_{args.task}.csv'),
                                        sep=',', index_col=0)

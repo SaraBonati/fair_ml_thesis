@@ -75,25 +75,40 @@ class Cluster:
         """
         all_dfs = []
         for file_path in self.data_paths:
-            df = pd.read_csv(file_path, sep=",")
+            df = pd.read_csv(file_path, sep=",", index_col=0)
             df['STATE'] = os.path.split(file_path)[1][5:7]
             all_dfs.append(df)
 
         data = pd.concat(all_dfs, ignore_index=True)
+        # keep only age between 16 and 90
+        data = data[data['AGEP'].between(16,90)]
+        # recode race column to have 3 values only
+        data['RAC1P'] = pd.to_numeric(data['RAC1P'])
+        data.loc[data['RAC1P'] > 2, 'RAC1P'] = 3
+
         X = data[["AGEP", "SCHL", "MAR", "CIT", "SEX", "RAC1P", "STATE"]]
+        X.loc[:, "AGEP"] = X["AGEP"].astype(np.int64)
+        print(X.iloc[[73,85,140,205,232],:])
+
         # categorize the age column
-        age_category = pd.cut(X.AGEP, bins=[0, 2, 14, 18, 30, 60, 80, 100], labels=['Toddler', 'Child', 'Teenager',
-                                                                                'Young Adult', 'Adult',
-                                                                                'Older Adult', 'Elderly'])
-        X.insert(0, 'AGE_CAT', age_category)
+        X['AGE_CAT'] = pd.cut(x=X['AGEP'],
+                              bins=[16, 25, 40, 60, 80, 90],
+                              labels=['Young_Adult1', 'Young_Adult2','Adult','Older_Adult', 'Older_than_80'])
+        X.loc[:, 'AGE_CAT'] = X['AGE_CAT'].astype("category")
+        print(X.iloc[[73, 85, 140, 205, 232], :])
         X.drop(columns=['AGEP'], inplace=True)
 
+
+        # print(X[X.isna().any(axis=1)])
         for i in ["SCHL", "MAR", "CIT", "SEX", "RAC1P"]:
+            print(f"column: {i}")
             # first remove the trailing zero by turning categorical numbers into ints
             X.loc[:, i] = X[i].astype(np.int64)
+            # then treat columns as categories
+            X.loc[:, i] = X[i].astype("category")
 
         cost = []
-        K = range(3, 10)
+        K = [5]#range(3, 10)
         for num_clusters in list(K):
             kmode = KModes(n_clusters=num_clusters, init="Cao", n_init=10, verbose=1)
             clusters = kmode.fit_predict(X)
@@ -106,15 +121,16 @@ class Cluster:
                 os.makedirs(os.path.join(tdir, str(year), task))
             X.to_csv(os.path.join(tdir, str(year), task, f"{task}_{str(year)}_kmodes_{num_clusters}.csv"))
 
-        # elbow curve
-        plt.plot(K, cost, 'bx-')
-        plt.xlabel('No. of clusters')
-        plt.ylabel('Cost')
-        plt.title('Kmodes - Elbow Method For Optimal k')
-        if not os.path.exists(os.path.join(tdir, str(year), task)):
-            os.makedirs(os.path.join(tdir, str(year), task))
-        plt.savefig(os.path.join(tdir, str(year), task, f"{task}_{str(year)}_elbow_kprototypes.png"),
-                    format='png', dpi=300)
+        if type(K) == list:
+            # elbow curve
+            plt.plot(K, cost, 'bx-')
+            plt.xlabel('No. of clusters')
+            plt.ylabel('Cost')
+            plt.title('Kmodes - Elbow Method For Optimal k')
+            if not os.path.exists(os.path.join(tdir, str(year), task)):
+                os.makedirs(os.path.join(tdir, str(year), task))
+            plt.savefig(os.path.join(tdir, str(year), task, f"{task}_{str(year)}_elbow_kprototypes.png"),
+                        format='png', dpi=300)
 
     def apply_clustering_kproto(self, task: str, year: int):
         """
@@ -130,18 +146,25 @@ class Cluster:
             all_dfs.append(df)
 
         data = pd.concat(all_dfs, ignore_index=True)
+        # keep only age between 16 and 90
+        data = data[data['AGEP'].between(16, 90)]
+        # recode race column to have 3 values only
+        data['RAC1P'] = pd.to_numeric(data['RAC1P'])
+        data.loc[data['RAC1P'] > 2, 'RAC1P'] = 3
         X = data[["AGEP", "SCHL", "MAR", "CIT", "SEX", "RAC1P", "STATE"]]
         # first standard scaler
         standard_scaler = StandardScaler()
         X[["AGEP"]] = standard_scaler.fit_transform(X[["AGEP"]])
         for i in ["SCHL", "MAR", "CIT", "SEX", "RAC1P"]:
+            print(f"column: {i}")
             # first remove the trailing zero by turning categorical numbers into ints
             X.loc[:, i] = X[i].astype(np.int64)
-        # true_labels = X[["STATE"]]
+            # then treat columns as categories
+            X.loc[:, i] = X[i].astype("category")
 
         cost = []
-        K = range(3, 10)
-        for num_clusters in list(K):
+        K = [5] #range(3, 10)
+        for num_clusters in K:
             kproto = KPrototypes(n_clusters=num_clusters, init="Cao", n_init=10, verbose=1)
             clusters = kproto.fit_predict(X, categorical=[1, 2, 3, 4, 5, 6])
             cost.append(kproto.cost_)
@@ -154,14 +177,14 @@ class Cluster:
             X.to_csv(os.path.join(tdir, str(year), task, f"{task}_{str(year)}_kproto_{num_clusters}.csv"))
 
         # elbow curve
-        plt.plot(K, cost, 'bx-')
-        plt.xlabel('No. of clusters')
-        plt.ylabel('Cost')
-        plt.title('Kprototypes - Elbow Method For Optimal k')
-        if not os.path.exists(os.path.join(tdir, str(year), task)):
-            os.makedirs(os.path.join(tdir, str(year), task))
-        plt.savefig(os.path.join(tdir, str(year), task, f"{task}_{str(year)}_elbow_kprototypes.png"),
-                    format='png', dpi=300)
+        # plt.plot(K, cost, 'bx-')
+        # plt.xlabel('No. of clusters')
+        # plt.ylabel('Cost')
+        # plt.title('Kprototypes - Elbow Method For Optimal k')
+        # if not os.path.exists(os.path.join(tdir, str(year), task)):
+        #     os.makedirs(os.path.join(tdir, str(year), task))
+        # plt.savefig(os.path.join(tdir, str(year), task, f"{task}_{str(year)}_elbow_kprototypes.png"),
+        #             format='png', dpi=300)
 
     def apply_clustering_kmeans(self, task: str, year: int):
         """
@@ -291,8 +314,8 @@ if __name__ == "__main__":
     if args.method == "kmeans":
         C.apply_clustering_kmeans(args.task, args.year)
     elif args.method == "kmodes":
-        for y in [2014,2015,2016,2017,2018]:
+        for y in [2014, 2015, 2016, 2017, 2018]:
             # C.apply_clustering_kmodes(args.task, args.year)
 
             C.apply_clustering_kproto(args.task, y)
-            C.apply_clustering_kmodes(args.task, y)
+            #C.apply_clustering_kmodes(args.task, y)

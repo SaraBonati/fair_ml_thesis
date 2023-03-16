@@ -2,6 +2,7 @@ import argparse
 import json
 import os
 import glob
+import pickle
 import numpy as np
 import pandas as pd
 from folktables import ACSDataSource, ACSEmployment, ACSIncome, ACSHealthInsurance
@@ -82,6 +83,16 @@ def check_missing_values_presence(task: str):
             df = pd.read_csv(d, sep=',')
             for c in list(df.columns):
                 print(df[c].isnull().sum())
+
+
+def load_classifier_results_data(data_path: str, model_type: str):
+    """
+    Loads the classifier data for results visualization, changing the index column to be the corresponding state
+    :param data_path: (str)
+    :param data_path: (str)
+    :return:
+    """
+    print("TODO")
 
 
 if __name__ == "__main__":

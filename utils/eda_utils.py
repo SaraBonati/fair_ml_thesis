@@ -2,12 +2,16 @@ import numpy as np
 import pandas as pd
 import os
 import re
+import glob
 import json
+import pickle
 import argparse
 import plotly.express as px
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 import streamlit as st
+import matplotlib.pyplot as plt
+from matplotlib.gridspec import GridSpec
 
 wdir = os.getcwd()
 ddir = os.path.join(os.path.split(wdir)[0], "fair_ml_thesis_data")
@@ -15,6 +19,23 @@ ddir = os.path.join(os.path.split(wdir)[0], "fair_ml_thesis_data")
 json_file_path = os.path.join(wdir, 'utils', 'tasks_metadata.json')
 with open(json_file_path, 'r') as j:
     task_infos = json.loads(j.read())
+
+
+def merge_pickle_roc_files(files_path: list):
+    """
+    This function merges into one dataframe all fpr and tpr values from multiple states
+    :param files_path:
+    :return:
+    """
+    final_df_list = []
+    pickle_files = glob.glob(files_path + r'\*.pickle')
+
+    for f in pickle_files:
+        # open a file, where you stored the pickled data
+        file = open(pickle_files[0], 'rb')
+        data = pickle.load(file)
+        sex_data = 1
+        race_data = 1
 
 
 def preprocess_healthinsurance(df):
@@ -42,6 +63,7 @@ def categorize(df, cat_columns):
         df[c] = df[c].astype(np.int64)
         df[c] = df[c].astype('category')
 
+
 def map_int_to_cat(df, cols_infos, cols):
     """
     This function, given a dataframe and a dict containing number to category mappings,
@@ -52,9 +74,10 @@ def map_int_to_cat(df, cols_infos, cols):
     :return:
     """
     for c in cols:
-        if c in list(cols_infos.keys()) and c not in ["ESR","HINS2"]:
+        if c in list(cols_infos.keys()) and c not in ["ESR", "HINS2"]:
             df[c] = df[c].map(cols_infos[c])
     return df
+
 
 def merge_dataframes_eda(paths: list, task: str):
     """
@@ -107,6 +130,7 @@ def make_mapplot(df, metric: str, title: str, context: str, state_col: str, colo
                             locationmode='USA-states',
                             scope="usa",
                             height=1300)
+        # fig.update_layout(coloraxis=dict(colorbar=dict(orientation='h', y=0.15)))
 
     return fig
 
@@ -125,7 +149,7 @@ def make_protected_plots(df, df_all_years, target_name: str):
                   values='SEX',
                   names='sex_class',
                   color='sex_class',
-                  color_discrete_map={2: 'coral', 1: 'teal'}) # were "female" and "male" before
+                  color_discrete_map={2: 'coral', 1: 'teal'})  # were "female" and "male" before
     fig1.update_traces(textposition='inside', textinfo='percent+label')
 
     # race
@@ -139,17 +163,17 @@ def make_protected_plots(df, df_all_years, target_name: str):
                       2: "SteelBlue",
                       3: "DarkViolet"
                   })
-                  # color_discrete_map={
-                  #     "White": "Crimson",
-                  #     "Black/African American": "SteelBlue",
-                  #     "American Indian": "Silver",
-                  #     "Alaska Native": "PowderBlue",
-                  #     "American Indian and Alaska Native tribes": "Chocolate",
-                  #     "Asian": "DarkViolet",
-                  #     "Native Hawaiian and Other Pacific Islander": "LimeGreen",
-                  #     "Some Other Race": "DarkSlateGrey",
-                  #     "Two or More Races": "DarkSeaGreen"
-                  # })
+    # color_discrete_map={
+    #     "White": "Crimson",
+    #     "Black/African American": "SteelBlue",
+    #     "American Indian": "Silver",
+    #     "Alaska Native": "PowderBlue",
+    #     "American Indian and Alaska Native tribes": "Chocolate",
+    #     "Asian": "DarkViolet",
+    #     "Native Hawaiian and Other Pacific Islander": "LimeGreen",
+    #     "Some Other Race": "DarkSlateGrey",
+    #     "Two or More Races": "DarkSeaGreen"
+    # })
     fig2.update_traces(textposition='inside', textinfo='percent+label')
 
     # race detailed
@@ -163,17 +187,17 @@ def make_protected_plots(df, df_all_years, target_name: str):
                       2: "SteelBlue",
                       3: "DarkViolet"
                   })
-                  # color_discrete_map={
-                  #     "White": "Crimson",
-                  #     "Black/African American": "SteelBlue",
-                  #     "American Indian": "Silver",
-                  #     "Alaska Native": "PowderBlue",
-                  #     "American Indian and Alaska Native tribes": "Chocolate",
-                  #     "Asian": "DarkViolet",
-                  #     "Native Hawaiian and Other Pacific Islander": "LimeGreen",
-                  #     "Some Other Race": "DarkSlateGrey",
-                  #     "Two or More Races": "DarkSeaGreen"
-                  # })
+    # color_discrete_map={
+    #     "White": "Crimson",
+    #     "Black/African American": "SteelBlue",
+    #     "American Indian": "Silver",
+    #     "Alaska Native": "PowderBlue",
+    #     "American Indian and Alaska Native tribes": "Chocolate",
+    #     "Asian": "DarkViolet",
+    #     "Native Hawaiian and Other Pacific Islander": "LimeGreen",
+    #     "Some Other Race": "DarkSlateGrey",
+    #     "Two or More Races": "DarkSeaGreen"
+    # })
     fig3.update_traces(textposition='inside', textinfo='percent+label')
 
     return fig1, fig2, fig3
@@ -332,6 +356,99 @@ def plot_ml_results_spatial(result_paths: list):
     return fig
 
 
+def plot_roc_curve_spatial(state_spatial_paths: list, protected_att: str):
+    """
+    Given false positive rates and true positive rates for a single state, this function
+    plots the ROC curve (for all individual states tested + a grand average). The ROC
+    curve is also plotted for the different classifiers
+    :param protected_att:
+    :param state_spatial_paths:
+    :return:
+    """
+    # collect all pickle files
+    pickle_files = glob.glob(state_spatial_paths + r'\*.pickle')
+    protected_variables = {'SEX':['male','female'], 'RAC1P':['white','black','other']}
+
+    fpr_mean = np.linspace(0, 1, 100)
+    interp_tprs = {i: [] for i in protected_variables[protected_att]}
+    for i in range(len(pickle_files)):
+        file = open(pickle_files[i], 'rb')
+        data = pickle.load(file)
+
+        fpr_male = data['SEX_fpr']['male']
+        tpr_male = data['SEX_tpr']['male']
+        interp_tpr_male = np.interp(fpr_mean, fpr_male, tpr_male)
+        interp_tpr_male[0] = 0.0
+        interp_tprs['male'].append(interp_tpr_male)
+
+    tpr_mean = np.mean(interp_tprs, axis=0)
+    tpr_mean[-1] = 1.0
+    tpr_std = 2 * np.std(interp_tprs, axis=0)
+    tpr_upper = np.clip(tpr_mean + tpr_std, 0, 1)
+    tpr_lower = tpr_mean - tpr_std
+
+    # sex variable figure
+    fig = go.Figure([
+        go.Scatter(
+            x=fpr_mean,
+            y=tpr_upper,
+            line=dict(color='blue', width=1),
+            hoverinfo="skip",
+            showlegend=False,
+            name='upper'),
+        go.Scatter(
+            x=fpr_mean,
+            y=tpr_lower,
+            fill='tonexty',
+            fillcolor='red',
+            line=dict(color='blue', width=1),
+            hoverinfo="skip",
+            showlegend=False,
+            name='lower'),
+        go.Scatter(
+            x=fpr_mean,
+            y=tpr_mean,
+            line=dict(color='blue', width=2),
+            hoverinfo="skip",
+            showlegend=True,
+            name=f'AUC: ')
+    ])
+    fig.add_shape(
+        type='line',
+        line=dict(dash='dash'),
+        x0=0, x1=1, y0=0, y1=1
+    )
+    fig.update_layout(
+        template='plotly_white',
+        title_x=0.5,
+        xaxis_title="1 - Specificity (or false positive rate)",
+        yaxis_title="Sensitivity (or true positive rate)",
+        width=800,
+        height=800,
+        legend=dict(
+            yanchor="bottom",
+            xanchor="right",
+            x=0.95,
+            y=0.01,
+        )
+    )
+    fig.update_yaxes(
+        range=[0, 1],
+        gridcolor='gray',
+        scaleanchor="x",
+        scaleratio=1,
+        linecolor='black')
+    fig.update_xaxes(
+        range=[0, 1],
+        gridcolor='gray',
+        constrain='domain',
+        linecolor='black')
+
+    st.write(fig)
+
+    # race variable figure
+
+
 def map_plot_ml_results_spatial(result_paths_sklearn: list, result_paths_aif: list):
     """
 
@@ -364,8 +481,8 @@ def map_plot_ml_results_spatial(result_paths_sklearn: list, result_paths_aif: li
         yanchor="bottom",
         y=1.02,
         xanchor="right",
-        x=1
-    ))
+        x=1),
+    )
     return fig
 
 
@@ -379,8 +496,8 @@ def plot_ml_results_temporal(result_path):
     df = pd.read_csv(result_path, sep=',')
     df.rename(columns={'Unnamed: 0': 'clf', 'Unnamed: 1': 'year'}, inplace=True)
 
-    #fig = px.bar(df, x="year", y="accuracy", color="clf", barmode="group")
-    fig = px.line(df, x="year", y="accuracy", color="clf",markers=True)
+    # fig = px.bar(df, x="year", y="accuracy", color="clf", barmode="group")
+    fig = px.line(df, x="year", y="accuracy", color="clf", markers=True)
     # Update xaxis properties
     fig.update_xaxes(title_text="Year")
     # Update yaxis properties
