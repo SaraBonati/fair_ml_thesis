@@ -79,7 +79,13 @@ bash fair_ml_cluster.sh
 ```
 
 The jobs can also be submitted as a job array using the `sbatch` command. An example can be seen in the file
-`fair_ml_cluster_job_array.sh`.
+`fair_ml_cluster_job_array.sh`, in that case all combinations of arguments to one of the analysis scripts are 
+calculated and the job array is submitted via command line with 
+
+```bash
+sbatch --array=1-n fair_ml_cluster_job_array.sh
+```
+where `n` is the number of parameter combinations. 
 
 ### Streamlit
 From the project home directory the streamlit app to visualize EDA plots and analysis results can be executed 
