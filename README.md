@@ -78,6 +78,9 @@ cd fair_ml_thesis
 bash fair_ml_cluster.sh
 ```
 
+The jobs can also be submitted as a job array using the `sbatch` command. An example can be seen in the file
+`fair_ml_cluster_job_array.sh`.
+
 ### Streamlit
 From the project home directory the streamlit app to visualize EDA plots and analysis results can be executed 
 locally by using the command
