@@ -25,8 +25,8 @@ mode="temporal"
 task="ACSEmployment"
 
 # -------Define computation parameters------------------------
-n_cpus=4 # maximum number of cpus per process
-mem=20GB # memory demand
+n_cpus=2 # maximum number of cpus per process
+mem=5GB # memory demand
 
 if [[ "${method}" == "sklearn" ]]; then
 
