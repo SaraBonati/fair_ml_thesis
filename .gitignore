@@ -161,4 +161,7 @@ cython_debug/
 
 # test scripts
 *_test.py
+*_test.sh
 *_test.ipynb
+*_cluster.py
+*_cluster.ipynb
