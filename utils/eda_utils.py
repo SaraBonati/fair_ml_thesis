@@ -113,7 +113,7 @@ def make_mapplot(df, metric: str, title: str, context: str, state_col: str, colo
 
     :return:
     """
-    if context == "Temporal":
+    if context == "temporal":
         fig = px.choropleth(df,
                             locations=state_col,
                             animation_frame="year",
@@ -122,7 +122,7 @@ def make_mapplot(df, metric: str, title: str, context: str, state_col: str, colo
                             locationmode='USA-states',
                             scope="usa",
                             height=1300)
-    elif context == "Spatial":
+    elif context == "spatial":
         fig = px.choropleth(df,
                             locations=state_col,
                             color=metric,
@@ -130,7 +130,8 @@ def make_mapplot(df, metric: str, title: str, context: str, state_col: str, colo
                             locationmode='USA-states',
                             scope="usa",
                             height=1300)
-        # fig.update_layout(coloraxis=dict(colorbar=dict(orientation='h', y=0.15)))
+        fig.update_traces(colorbar=dict(orientation='v',thickness=0.1))
+        #fig.update_layout(coloraxis=dict(colorbar=dict(orientation='h')))
 
     return fig
 
@@ -355,99 +356,162 @@ def plot_ml_results_spatial(result_paths: list):
         fig.update_layout(title_text=result_paths[p][:-20], width=1400, height=2500)
     return fig
 
-
-def plot_roc_curve_spatial(state_spatial_paths: list, protected_att: str):
+def roc_curve_sex(state: str, year: str):
     """
-    Given false positive rates and true positive rates for a single state, this function
-    plots the ROC curve (for all individual states tested + a grand average). The ROC
-    curve is also plotted for the different classifiers
-    :param protected_att:
-    :param state_spatial_paths:
+
+    :param state:
+    :param year:
     :return:
     """
-    # collect all pickle files
-    pickle_files = glob.glob(state_spatial_paths + r'\*.pickle')
-    protected_variables = {'SEX':['male','female'], 'RAC1P':['white','black','other']}
+    import matplotlib.gridspec as gridspec
+    protected_variables = {'SEX': ['male', 'female'], 'RAC1P': ['white', 'black', 'other']}
+    classifier_names = ["LogReg", "LinearSVC", "XGBoost", "AdversarialDebiasing", "ExponentiatedGradientReduction"]
+    states=[state]
 
-    fpr_mean = np.linspace(0, 1, 100)
-    interp_tprs = {i: [] for i in protected_variables[protected_att]}
-    for i in range(len(pickle_files)):
-        file = open(pickle_files[i], 'rb')
-        data = pickle.load(file)
+    fig = plt.figure(figsize=(15, 4))
+    gs = gridspec.GridSpec(1, 5)
 
-        fpr_male = data['SEX_fpr']['male']
-        tpr_male = data['SEX_tpr']['male']
-        interp_tpr_male = np.interp(fpr_mean, fpr_male, tpr_male)
-        interp_tpr_male[0] = 0.0
-        interp_tprs['male'].append(interp_tpr_male)
+    for s in range(len(states)):
+        for c in range(len(classifier_names)):
+            print(f"{states[s]} - {classifier_names[c]}")
+            if len(classifier_names[c]) > 10:
+                state_spatial_path = os.path.join(r"C:\Users\sarab\Desktop\results2_download\ACSEmployment", str(year),
+                                                  'aif360', states[s])
+            else:
+                state_spatial_path = os.path.join(r"C:\Users\sarab\Desktop\results2_download\ACSEmployment", str(year),
+                                                  'sklearn', states[s])
 
-    tpr_mean = np.mean(interp_tprs, axis=0)
-    tpr_mean[-1] = 1.0
-    tpr_std = 2 * np.std(interp_tprs, axis=0)
-    tpr_upper = np.clip(tpr_mean + tpr_std, 0, 1)
-    tpr_lower = tpr_mean - tpr_std
+            pickle_files = glob.glob(state_spatial_path + f'\*_{classifier_names[c]}.pickle')
+            fpr_mean = np.linspace(0, 1, 100)
+            interp_tprs = {i: np.zeros((len(pickle_files), 100)) for i in protected_variables['SEX']}
+            for i in range(len(pickle_files)):
+                file = open(pickle_files[i], 'rb')
+                data = pickle.load(file)
 
-    # sex variable figure
-    fig = go.Figure([
-        go.Scatter(
-            x=fpr_mean,
-            y=tpr_upper,
-            line=dict(color='blue', width=1),
-            hoverinfo="skip",
-            showlegend=False,
-            name='upper'),
-        go.Scatter(
-            x=fpr_mean,
-            y=tpr_lower,
-            fill='tonexty',
-            fillcolor='red',
-            line=dict(color='blue', width=1),
-            hoverinfo="skip",
-            showlegend=False,
-            name='lower'),
-        go.Scatter(
-            x=fpr_mean,
-            y=tpr_mean,
-            line=dict(color='blue', width=2),
-            hoverinfo="skip",
-            showlegend=True,
-            name=f'AUC: ')
-    ])
-    fig.add_shape(
-        type='line',
-        line=dict(dash='dash'),
-        x0=0, x1=1, y0=0, y1=1
-    )
-    fig.update_layout(
-        template='plotly_white',
-        title_x=0.5,
-        xaxis_title="1 - Specificity (or false positive rate)",
-        yaxis_title="Sensitivity (or true positive rate)",
-        width=800,
-        height=800,
-        legend=dict(
-            yanchor="bottom",
-            xanchor="right",
-            x=0.95,
-            y=0.01,
-        )
-    )
-    fig.update_yaxes(
-        range=[0, 1],
-        gridcolor='gray',
-        scaleanchor="x",
-        scaleratio=1,
-        linecolor='black')
-    fig.update_xaxes(
-        range=[0, 1],
-        gridcolor='gray',
-        constrain='domain',
-        linecolor='black')
+                fpr_male = data['SEX_fpr']['male']
+                tpr_male = data['SEX_tpr']['male']
+                fpr_female = data['SEX_fpr']['female']
+                tpr_female = data['SEX_tpr']['female']
 
-    st.write(fig)
+                interp_tpr_male = np.interp(fpr_mean, fpr_male, tpr_male)
+                interp_tpr_male[0] = 0.0
+                interp_tprs['male'][i, :] = interp_tpr_male
+                interp_tpr_female = np.interp(fpr_mean, fpr_female, tpr_female)
+                interp_tpr_female[0] = 0.0
+                interp_tprs['female'][i, :] = interp_tpr_female
 
-    # race variable figure
+            tpr_mean_male = np.mean(interp_tprs['male'], axis=0)
+            tpr_mean_male[-1] = 1.0
+            tpr_std_male = 2 * np.std(interp_tprs['male'], axis=0)
+            tpr_upper_male = np.clip(tpr_mean_male + tpr_std_male, 0, 1)
+            tpr_lower_male = tpr_mean_male - tpr_std_male
 
+            tpr_mean_female = np.mean(interp_tprs['female'], axis=0)
+            tpr_mean_female[-1] = 1.0
+            tpr_std_female = 2 * np.std(interp_tprs['female'], axis=0)
+            tpr_upper_female = np.clip(tpr_mean_female + tpr_std_female, 0, 1)
+            tpr_lower_female = tpr_mean_female - tpr_std_female
+
+            ax = fig.add_subplot(gs[s, c])
+            ax.set_title(f'{classifier_names[c]}' + "\n" + f'(train state={states[s]})', fontsize=15)
+            ax.set_xlabel('false positive rate (fpr)', fontsize=15)
+            if c == 0:
+                ax.set_ylabel('true positive rate (tpr)', fontsize=15)
+
+            ax.plot(fpr_mean, tpr_mean_male, color='teal', label='SEX = male')
+            ax.fill_between(fpr_mean, tpr_lower_male, tpr_upper_male, color='teal', alpha=0.5)
+            ax.plot(fpr_mean, tpr_mean_female, color='coral', label='SEX = female')
+            ax.fill_between(fpr_mean, tpr_lower_female, tpr_upper_female, color='coral', alpha=0.5)
+
+            if c == 0 and s == 0:
+                ax.legend(loc=4)
+
+    return fig
+
+
+def roc_curve_race(state: str, year:str):
+    """
+
+    :param state:
+    :param year:
+    :return:
+    """
+    import matplotlib.gridspec as gridspec
+    protected_variables = {'SEX': ['male', 'female'], 'RAC1P': ['white', 'black', 'other']}
+    classifier_names = ["LogReg", "LinearSVC", "XGBoost", "AdversarialDebiasing", "ExponentiatedGradientReduction"]
+    states=[state]
+
+    fig2 = plt.figure(figsize=(15,4))
+    gs2 = gridspec.GridSpec(1, 5)
+
+    for s in range(len(states)):
+        for c in range(len(classifier_names)):
+            print(f"{states[s]} - {classifier_names[c]}")
+            if len(classifier_names[c]) > 10:
+                state_spatial_path = os.path.join(r"C:\Users\sarab\Desktop\results2_download\ACSEmployment", str(year),
+                                                  'aif360', states[s])
+            else:
+                state_spatial_path = os.path.join(r"C:\Users\sarab\Desktop\results2_download\ACSEmployment", str(year),
+                                                  'sklearn', states[s])
+
+            pickle_files = glob.glob(state_spatial_path + f'\*_{classifier_names[c]}.pickle')
+            fpr_mean = np.linspace(0, 1, 100)
+            interp_tprs = {i: np.zeros((len(pickle_files), 100)) for i in protected_variables['RAC1P']}
+            for i in range(len(pickle_files)):
+                file = open(pickle_files[i], 'rb')
+                data = pickle.load(file)
+
+                fpr_white = data['RAC1P_fpr']['white']
+                tpr_white = data['RAC1P_tpr']['white']
+                fpr_black = data['RAC1P_fpr']['black']
+                tpr_black = data['RAC1P_tpr']['black']
+                fpr_other = data['RAC1P_fpr']['other']
+                tpr_other = data['RAC1P_tpr']['other']
+
+                interp_tpr_white = np.interp(fpr_mean, fpr_white, tpr_white)
+                interp_tpr_white[0] = 0.0
+                interp_tprs['white'][i, :] = interp_tpr_white
+                interp_tpr_black = np.interp(fpr_mean, fpr_black, tpr_black)
+                interp_tpr_black[0] = 0.0
+                interp_tprs['black'][i, :] = interp_tpr_black
+                interp_tpr_other = np.interp(fpr_mean, fpr_other, tpr_other)
+                interp_tpr_other[0] = 0.0
+                interp_tprs['other'][i, :] = interp_tpr_other
+
+            tpr_mean_white = np.mean(interp_tprs['white'], axis=0)
+            tpr_mean_white[-1] = 1.0
+            tpr_std_white = 2 * np.std(interp_tprs['white'], axis=0)
+            tpr_upper_white = np.clip(tpr_mean_white + tpr_std_white, 0, 1)
+            tpr_lower_white = tpr_mean_white - tpr_std_white
+
+            tpr_mean_black = np.mean(interp_tprs['black'], axis=0)
+            tpr_mean_black[-1] = 1.0
+            tpr_std_black = 2 * np.std(interp_tprs['black'], axis=0)
+            tpr_upper_black = np.clip(tpr_mean_black + tpr_std_black, 0, 1)
+            tpr_lower_black = tpr_mean_black - tpr_std_black
+
+            tpr_mean_other = np.mean(interp_tprs['other'], axis=0)
+            tpr_mean_other[-1] = 1.0
+            tpr_std_other = 2 * np.std(interp_tprs['other'], axis=0)
+            tpr_upper_other = np.clip(tpr_mean_other + tpr_std_other, 0, 1)
+            tpr_lower_other = tpr_mean_other - tpr_std_other
+
+            ax = fig2.add_subplot(gs2[s, c])
+            ax.set_title(f'{classifier_names[c]}' + "\n" + f'(train state={states[s]})', fontsize=15)
+            ax.set_xlabel('false positive rate (fpr)', fontsize=15)
+            if c == 0:
+                ax.set_ylabel('true positive rate (tpr)', fontsize=15)
+            ax.plot(fpr_mean, tpr_mean_white, color='blue', label='RAC1P = white')
+            ax.fill_between(fpr_mean, tpr_lower_white, tpr_upper_white, color='blue', alpha=0.5)
+            ax.plot(fpr_mean, tpr_mean_black, color='red', label='RAC1P = black')
+            ax.fill_between(fpr_mean, tpr_lower_black, tpr_upper_black, color='red', alpha=0.5)
+            ax.plot(fpr_mean, tpr_mean_other, color='green', label='RAC1P = other')
+            ax.fill_between(fpr_mean, tpr_lower_other, tpr_upper_other, color='green', alpha=0.5)
+
+            if c == 0 and s == 0:
+                ax.legend(loc=4)
+
+    return fig2
 
 def map_plot_ml_results_spatial(result_paths_sklearn: list, result_paths_aif: list):
     """
@@ -460,8 +524,8 @@ def map_plot_ml_results_spatial(result_paths_sklearn: list, result_paths_aif: li
     dfs = []
     for p in range(len(result_paths_sklearn)):
         df = pd.read_csv(result_paths_sklearn[p], header=0, sep=',')
-        state = os.path.split(result_paths_sklearn[p])[1][:2]
-        start, end = f'{state}_test_all_', '.csv'
+        state = os.path.split(result_paths_sklearn[p])[1][8:10]
+        start, end = f'spatial_{state}_test_all_', '.csv'
         df['CLASSIFIER'] = re.search('%s(.*)%s' % (start, end), result_paths_sklearn[p]).group(1)
         df['CLASSIFIER_TYPE'] = "normal"
         dfs.append(df)

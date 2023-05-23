@@ -17,7 +17,7 @@ import os
 import glob
 import json
 from utils.eda_utils import plot_ml_results_spatial, plot_ml_results_temporal,\
-    make_mapplot, map_plot_ml_results_spatial, plot_roc_curve_spatial
+    make_mapplot, map_plot_ml_results_spatial, roc_curve_sex, roc_curve_race
 
 # directory management
 wdir = os.getcwd()  # working directory
@@ -49,10 +49,10 @@ ml_form = st.form("ML Results form")
 # get task, state and context to visualize
 select_task = ml_form.selectbox('Which classification task do you want to focus on?', task_infos['task_names'])
 select_state = ml_form.selectbox('Which state used in training do you want to visualize?', task_infos['states'])
-select_context = ml_form.selectbox('Which context do you want to focus on?', ['Spatial', 'Temporal'])
+select_context = ml_form.selectbox('Which context do you want to focus on?', ['spatial', 'temporal'])
 ml_form_submitted = ml_form.form_submit_button("Submit")
 
-if select_context == 'Spatial':
+if select_context == 'spatial':
     select_year = st.selectbox('Which year do you want to use?', np.arange(min(task_infos['years']),
                                                                            max(task_infos['years'])+1))
     # select data paths according to year selection
@@ -60,18 +60,22 @@ if select_context == 'Spatial':
     # or C:\Users\sarab\Desktop\Data_Science_MSc\master_thesis\thesis_code\results
     # result paths (sklearn)
     results_sklearn_paths = glob.glob(
-        os.path.join(r"C:\Users\sarab\Desktop\Data_Science_MSc\master_thesis\thesis_code\results",
-                     select_task, str(select_year), 'sklearn', select_state) + f'/{select_state}_test_all_*.csv')
+        os.path.join(r"C:\Users\sarab\Desktop\results2_download",
+                     select_task,
+                     str(select_year),
+                     'sklearn', select_state) + f'/{select_context}_{select_state}_test_all_*.csv')
     results_sklearn_paths.sort()
+    st.write(results_sklearn_paths)
     df_sklearn = pd.read_csv(results_sklearn_paths[0], header=0, sep=',')
     df_sklearn.rename(columns={'Unnamed: 0': 'state'}, inplace=True)
 
     # result paths (aif360)
     results_aif360_paths = glob.glob(
-        os.path.join(r"C:\Users\sarab\Desktop\Data_Science_MSc\master_thesis\fair_ml_thesis_data\results",
+        os.path.join(r"C:\Users\sarab\Desktop\results2_download",
                      select_task, str(select_year), 'aif360', select_state) + f'/{select_context}'
                                                                               f'_{select_state}_test_all_*.csv')
     results_aif360_paths.sort()
+    st.write(results_aif360_paths)
     df_aif = pd.read_csv(results_aif360_paths[0], header=0, sep=',')
     df_aif.rename(columns={'Unnamed: 0': 'state'}, inplace=True)
 
@@ -99,7 +103,7 @@ if select_context == 'Spatial':
     # st.plotly_chart(fig)
 
     st.markdown(f"What about the different machine learning models tested, will they show a difference in accuracy?"
-                f"Let's take a closer look at these differences below.")
+                f"Let's take a closer look at these differences below. Each of the points next to the boxplots is one of the states used in testing.")
     fig_box = map_plot_ml_results_spatial(results_sklearn_paths,results_aif360_paths)
     st.plotly_chart(fig_box)
 
@@ -109,42 +113,60 @@ if select_context == 'Spatial':
                 f"for each protected attribute whether the false positive rate and true positive rates change "
                 f"depending on attribute values.")
 
-    #plot_roc_curve_spatial(os.path.join(r"C:\Users\sarab\Desktop\Data_Science_MSc\master_thesis\fair_ml_thesis_data
-    # \results",
-    #                                   select_task, str(select_year), 'sklearn', select_state), 'SEX')
+    st.pyplot(roc_curve_sex(select_state,select_year))
+    st.pyplot(roc_curve_race(select_state, select_year))
+
 
     st.markdown(f"Next, we focus on fairness metrics. Here we display for our protected attributes, "
                 f"SEX and RAC1P, the information across the US map for the"
                 f"different metrics we collected. Note that: ")
-    st.markdown(f"* for Statistical Parity a value closer to 0 is better")
-    st.markdown(f"* for Disparate Impact Ratio a higher value is better")
+    st.markdown(f"* Demographic parity difference (DPD) is defined as the difference between the largest and the "
+                f"smallest group-level selection rate XX, across all values of the sensitive feature(s). The "
+                f"demographic parity difference of 0 means that all groups have the same selection rate."
+                f"For Demographic Parity Difference a value closer to 0 is better")
+    st.markdown(f"* Equalized Odds Difference is collected here and stands for the greater of two metrics: "
+                f"true_positive_rate_difference and false_positive_rate_difference. The former is the "
+                f"difference between the largest and smallest of XX across all values of the sensitive feature(s). "
+                f"The latter is defined similarly, but for XX. The equalized odds difference of 0 means that all "
+                f"groups have the same true positive, true negative, false positive, and false negative rates.")
 
     col1, col2 = st.columns(2, gap='large')
     # statistical parity + disparate impact ratio (sex)
     with col1:
-        st.markdown(f"### SPD (SEX)")
-        st.plotly_chart(make_mapplot(df_sklearn, "sex_spd", "SPD (SEX)", select_context,"state", "blues"))
+        st.markdown(f"### DPD (SEX)")
+        st.plotly_chart(make_mapplot(df_sklearn, "sex_dpd", "DPD (SEX)", select_context,"state", "blues"))
     with col2:
-        st.markdown(f"### DIR (SEX)")
-        st.plotly_chart(make_mapplot(df_sklearn, "sex_dir", "DIR (SEX)", select_context,"state", "reds"))
+        st.markdown(f"### EOD (SEX)")
+        st.plotly_chart(make_mapplot(df_sklearn, "sex_eod", "EOD (SEX)", select_context,"state", "reds"))
 
     col1, col2 = st.columns(2, gap='large')
     # statistical parity + disparate impact ratio (race)
     with col1:
-        st.markdown(f"### SPD (RACE)")
-        st.plotly_chart(make_mapplot(df_sklearn, "rac_spd", "SPD (RACE)", select_context,"state", "blues"))
+        st.markdown(f"### DPD (RACE)")
+        st.plotly_chart(make_mapplot(df_sklearn, "rac_dpd", "DPD (RACE)", select_context,"state", "blues"))
     with col2:
-        st.markdown(f"### DIR (RACE)")
-        st.plotly_chart(make_mapplot(df_sklearn, "rac_dir", "DIR (RACE)", select_context,"state", "reds"))
+        st.markdown(f"### EOD (RACE)")
+        st.plotly_chart(make_mapplot(df_sklearn, "rac_eod", "EOD (RACE)", select_context,"state", "reds"))
 
-if select_context == 'Temporal':
+if select_context == 'temporal':
     select_year = st.slider('Which year do you want to use?', 2014, 2018)
     # select data paths according to year selection
-    results_sklearn_paths = glob.glob(os.path.join(ddir, select_task, str(select_year), 'sklearn',select_state,
-                                                   f'temporal_{select_state}_test_{str(select_year)}.csv'))
 
-    df = pd.read_csv(results_sklearn_paths[0], sep=',')
-    st.write(df)
+    # sklearn
+    results_sklearn_paths = glob.glob(os.path.join(r'C:\Users\sarab\Desktop\results2_download', select_task,
+                                                   str(select_year), 'sklearn',select_state,
+                                                   f'{select_context}_{select_state}_test_{str(select_year)}.csv'))
+
+    df_sklearn = pd.read_csv(results_sklearn_paths[0], sep=',')
+    st.write(df_sklearn)
+
+    # aif360
+    results_aif360_paths = glob.glob(os.path.join(r'C:\Users\sarab\Desktop\results2_download', select_task,
+                                                   str(select_year), 'aif360', select_state,
+                                                   f'{select_context}_{select_state}_test_{str(select_year)}.csv'))
+
+    df_aif = pd.read_csv(results_aif360_paths[0], sep=',')
+    st.write(df_aif)
 
     # accuracy
     fig = plot_ml_results_temporal(results_sklearn_paths[0])
