@@ -29,8 +29,6 @@ class Sample:
         with open(imbalance_file_path, 'r') as j:
             self.imb_infos = json.loads(j.read())
 
-        # load data
-        # self.data = pd.read_csv(os.path.join(adir, self.task, "ACSEmployment_all.csv"),sep=',', index_col=0)
 
     def calculate_imbalance_table(self):
         """
@@ -121,7 +119,7 @@ class Sample:
                     a = df.sample(n=len(df), random_state=self.random_state)
                 else:
                     a = df.sample(n=(max_value - v), random_state=self.random_state)
-                #a = df.sample(n=round((max_value - v) / len(cluster_states)))
+
                 print(k, len(a))
 
                 dfs.append(a)
@@ -151,44 +149,6 @@ class Sample:
                                   f'{args.year}_{args.state}_{task}.csv'),
                                 sep=',', index=False)
 
-    def get_balanced_data(self, train_state: str, year: int):
-        """
-
-        :param train_state:
-        :param year:
-        :return:
-        """
-
-        # get specific year - trian state combo imbalance numbers
-        imbalance_infos = self.imb_infos[str(year)][train_state]
-        # get states that belong in same cluster as train state for provided year
-        cluster_states = [ i for k,v in self.bea_infos[str(year)].items()
-                           for i in v
-                           if (train_state in v) and (i!=train_state)
-                           ]
-        print(cluster_states)
-        max_key = max(imbalance_infos.items(), key=lambda k: k[1])[0]
-        max_value = max(imbalance_infos.items(), key=lambda k: k[1])[1]
-        sample_dict = {}
-
-        dfs = []
-        for state in cluster_states:
-            year_data = self.data[(self.data['YEAR']==year) & (self.data['STATE']==state)]
-            for k,v in imbalance_infos.items():
-                if k!=max_key:
-                    df = year_data.query(f'(ESR == {eval(k)[0]}) &'
-                                         f' (SEX == {eval(k)[1]}) &'
-                                         f' (RAC1P == {eval(k)[2]})')
-
-                    if len(df) >= round((max_value-v)/len(cluster_states)):
-                        a = df.sample(n=round((max_value-v)/len(cluster_states)))
-                    else:
-                        a = df.sample(n=len(df))
-                    print(state, len(year_data), k, '->', len(df), f'(to sample is'
-                                                             f' {round((max_value-v)/len(cluster_states))})')
-
-                    dfs.append(a)
-
 #########################
 # SCRIPT
 #########################
@@ -207,9 +167,6 @@ if __name__ == "__main__":
     udir = os.path.join(os.path.split(wdir)[0], "fair_ml_thesis", "utils")
     ddir = os.path.join(os.path.split(wdir)[0], "fair_ml_thesis_data", "rawdata")
     cdir = os.path.join(os.path.split(wdir)[0], "fair_ml_thesis_data", "clustering")
-    #udir = os.path.join(os.path.split(wdir)[0], "utils")
-    #ddir = os.path.join(os.path.split(os.path.split(wdir)[0])[0], "fair_ml_thesis_data", "rawdata")
-    #cdir = os.path.join(os.path.split(os.path.split(wdir)[0])[0], "fair_ml_thesis_data", "clustering")
 
     json_file_path = os.path.join(udir, 'tasks_metadata.json')
     with open(json_file_path, 'r') as j:
