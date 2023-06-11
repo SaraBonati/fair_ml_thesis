@@ -66,26 +66,28 @@ python aif360_models.py --mode spatial --task ACSEmployment --year 2014
 python aif360_models.py --mode temporal --task ACSEmployment --year 2014
 ```
 
-To run the scripts in a cluster setting use the bash script `fair_ml_cluster.sh` to submit multiple jobs at the same 
-time:
+To run the scripts in an HPC cluster setting use the bash script `fair_ml_cluster_job_array.sh` (for normal analyses)
+. Next, the script and the sampled results be used in the analyses that use domain knowledge; these can be launched 
+using the bash script `fair_ml_cluster_job_array_sampled.sh`. The scripts prepare a job array, submitting one 
+slurm job for each combination of arguments in the script. Note that the scripts have to be modified accordingly 
+depending on whether one wants to run sklearn or aif360 models, and depending on the type of analysis (spatial or 
+temporal). 
+
 
 ```bash
 # load Python module in cluster
 module add Python/3.8.6-GCCcore-10.20.0
-# change to repo directory
+# change to repo directory (must clone or add scripts into cluster first)
 cd fair_ml_thesis 
-# run bash script that creates a .slurm job file and submits job to slurm scheduler
-bash fair_ml_cluster.sh
-```
-
-The jobs can also be submitted as a job array using the `sbatch` command. An example can be seen in the file
-`fair_ml_cluster_job_array.sh`, in that case all combinations of arguments to one of the analysis scripts are 
-calculated and the job array is submitted via command line with 
-
-```bash
+# run bash script that creates a .slurm job file and submits jobs to slurm scheduler
+# (for normal analyses)
 sbatch --array=1-n fair_ml_cluster_job_array.sh
+# (to create sampled data with domain knowledge)
+sbatch --array=1-n sample_cluster_job_array.sh
+# (for analyses using domain knowledge)
+sbatch --array=1-n fair_ml_cluster_job_array_sampled.sh
 ```
-where `n` is the number of parameter combinations. 
+
 
 ### Streamlit
 From the project home directory the streamlit app to visualize EDA plots and analysis results can be executed 
