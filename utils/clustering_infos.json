@@ -2,38 +2,38 @@
   "BEA_clustering": {
     "2014": {
           "0": ["ME","VT","RI","DE","ND","SD","MT","ID","WY","AK"],
-          "1": ["NH","DC","WV","MS","AR","KS","NE","NM","UT","NV","HI"],
+          "1": ["NH","WV","MS","AR","KS","NE","NM","UT","NV","HI"],
           "2": ["CT","KY","SC","AL","IA","MO","LA","OK","AZ","OR"],
           "3": ["MA","MD","VA","TN","IN","MI","WI","MN","CO","WA"],
-          "4": ["CA","TX","IL","FL","GA","NC","OH","PA","NY"]
+          "4": ["CA","TX","IL","FL","GA","NC","OH","PA","NY","NJ"]
     },
     "2015": {
           "0": ["ME","VT","RI","WV","ND","SD","MT","ID","WY","AK"],
-          "1": ["NH","DC","DE","MS","AR","KS","NE","NM","UT","NV","HI"],
+          "1": ["NH","DE","MS","AR","KS","NE","NM","UT","NV","HI"],
           "2": ["CT","KY","SC","AL","IA","MO","LA","OK","AZ","OR"],
           "3": ["MA","MD","VA","TN","IN","MI","WI","MN","CO","WA"],
-          "4": ["CA","TX","IL","FL","GA","NC","OH","PA","NY"]
+          "4": ["CA","TX","IL","FL","GA","NC","OH","PA","NY","NJ"]
     },
     "2016": {
           "0": ["ME","VT","RI","DE","ND","SD","MT","ID","WY","AK"],
-          "1": ["NH","DC","WV","MS","AR","KS","NE","NM","UT","NV","HI"],
+          "1": ["NH","WV","MS","AR","KS","NE","NM","UT","NV","HI"],
           "2": ["CT","KY","SC","AL","IA","MO","LA","OK","AZ","OR"],
           "3": ["MA","MD","VA","TN","IN","MI","WI","MN","CO","WA"],
-          "4": ["CA","TX","IL","FL","GA","NC","OH","PA","NY"]
+          "4": ["CA","TX","IL","FL","GA","NC","OH","PA","NY","NJ"]
     },
     "2017": {
           "0": ["ME","VT","RI","DE","ND","SD","MT","ID","WY","AK"],
-          "1": ["NH","DC","WV","MS","AR","KS","NE","NM","UT","NV","HI"],
-          "2": ["CT","KY","SC","AL","IA","MO","LA","OK","OR", "WI"],
+          "1": ["NH","WV","MS","AR","KS","NE","NM","UT","NV","HI"],
+          "2": ["CT","KY","SC","AL","IA","MO","LA","OK","OR","WI"],
           "3": ["AZ","MA","MD","VA","TN","IN","MI","MN","CO","WA"],
-          "4": ["CA","TX","IL","FL","GA","NC","OH","PA","NY"]
+          "4": ["CA","TX","IL","FL","GA","NC","OH","PA","NY","NJ"]
     },
     "2018": {
           "0": ["ME","VT","RI","DE","ND","SD","MT","ID","WY","AK"],
-          "1": ["NH","DC","WV","MS","AR","KS","NE","NM","UT","NV","HI"],
-          "2": ["CT","KY","SC","AL","IA","MO","LA","OK","OR", "WI"],
+          "1": ["NH","WV","MS","AR","KS","NE","NM","UT","NV","HI"],
+          "2": ["CT","KY","SC","AL","IA","MO","LA","OK","OR","WI"],
           "3": ["AZ","MA","MD","VA","TN","IN","MI","MN","CO","WA"],
-          "4": ["CA","TX","IL","FL","GA","NC","OH","PA","NY"]
+          "4": ["CA","TX","IL","FL","GA","NC","OH","PA","NY","NJ"]
     }
   }
 }
