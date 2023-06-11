@@ -14,7 +14,7 @@
 # declare array containing script args combinations
 declare -a combinations
 index=0
-for mode in 'temporal' #'spatial'
+for mode in 'temporal' 'spatial'
 do
     for train in 'AL' 'AK' 'AZ' 'AR' 'CA' 'CO' 'CT' 'DE' 'FL' 'GA' 'HI' 'ID' 'IL' 'IN' 'IA' 'KS' 'KY' 'LA' 'ME' 'MD' 'MA' 'MI' 'MN' 'MS' 'MO' 'MT' 'NE' 'NV' 'NH' 'NJ' 'NM' 'NY' 'NC' 'ND' 'OH' 'OK' 'OR' 'PA' 'RI' 'SC' 'SD' 'TN' 'TX' 'UT' 'VT' 'VA' 'WA' 'WV' 'WI' 'WY'
     do
@@ -36,4 +36,7 @@ module add Python/3.8.6-GCCcore-10.2.0
 source venv/bin/activate
 
 # run script
+# sklearn
+python models/sklearn_models_cluster_new.py  --mode ${mode} --train ${train} --year ${year}
+# aif
 python models/aif360_models_cluster_new.py  --mode ${mode} --train ${train} --year ${year}
