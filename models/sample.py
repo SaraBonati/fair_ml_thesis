@@ -166,7 +166,7 @@ if __name__ == "__main__":
     wdir = os.getcwd()
     udir = os.path.join(os.path.split(wdir)[0], "fair_ml_thesis", "utils")
     ddir = os.path.join(os.path.split(wdir)[0], "fair_ml_thesis_data", "rawdata")
-    cdir = os.path.join(os.path.split(wdir)[0], "fair_ml_thesis_data", "clustering")
+    cdir = os.path.join(os.path.split(wdir)[0], "fair_ml_thesis_data", "new_clustering")
 
     json_file_path = os.path.join(udir, 'tasks_metadata.json')
     with open(json_file_path, 'r') as j:
