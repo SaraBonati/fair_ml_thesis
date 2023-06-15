@@ -67,8 +67,9 @@ python aif360_models.py --mode temporal --task ACSEmployment --year 2014
 ```
 
 To run the scripts in an HPC cluster setting use the bash script `fair_ml_cluster_job_array.sh` (for normal analyses)
-. Next, the script and the sampled results be used in the analyses that use domain knowledge; these can be launched 
-using the bash script `fair_ml_cluster_job_array_sampled.sh`. The scripts prepare a job array, submitting one 
+, `sample_cluster_job_array.sh` (to apply the data augmentation usign domain knowledge) or 
+`fair_ml_cluster_job_array_sampled.sh` (for analyses that use upsampled data). These scripts 
+prepare a job array with `n` total jobs, submitting one 
 slurm job for each combination of arguments in the script. Note that the scripts have to be modified accordingly 
 depending on whether one wants to run sklearn or aif360 models, and depending on the type of analysis (spatial or 
 temporal). 
