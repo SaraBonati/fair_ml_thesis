@@ -365,11 +365,11 @@ def roc_curve_sex(state: str, year: str):
     """
     import matplotlib.gridspec as gridspec
     protected_variables = {'SEX': ['male', 'female'], 'RAC1P': ['white', 'black', 'other']}
-    classifier_names = ["LogReg", "LinearSVC", "XGBoost", "AdversarialDebiasing", "ExponentiatedGradientReduction"]
+    classifier_names = ["LogReg", "LinearSVC", "XGBoost", "AdversarialDebiasing"]
     states=[state]
 
     fig = plt.figure(figsize=(15, 4))
-    gs = gridspec.GridSpec(1, 5)
+    gs = gridspec.GridSpec(1, 4)
 
     for s in range(len(states)):
         for c in range(len(classifier_names)):
@@ -402,13 +402,13 @@ def roc_curve_sex(state: str, year: str):
 
             tpr_mean_male = np.mean(interp_tprs['male'], axis=0)
             tpr_mean_male[-1] = 1.0
-            tpr_std_male = 2 * np.std(interp_tprs['male'], axis=0)
+            tpr_std_male = np.std(interp_tprs['male'], axis=0)
             tpr_upper_male = np.clip(tpr_mean_male + tpr_std_male, 0, 1)
             tpr_lower_male = tpr_mean_male - tpr_std_male
 
             tpr_mean_female = np.mean(interp_tprs['female'], axis=0)
             tpr_mean_female[-1] = 1.0
-            tpr_std_female = 2 * np.std(interp_tprs['female'], axis=0)
+            tpr_std_female = np.std(interp_tprs['female'], axis=0)
             tpr_upper_female = np.clip(tpr_mean_female + tpr_std_female, 0, 1)
             tpr_lower_female = tpr_mean_female - tpr_std_female
 
@@ -438,11 +438,11 @@ def roc_curve_race(state: str, year:str):
     """
     import matplotlib.gridspec as gridspec
     protected_variables = {'SEX': ['male', 'female'], 'RAC1P': ['white', 'black', 'other']}
-    classifier_names = ["LogReg", "LinearSVC", "XGBoost", "AdversarialDebiasing", "ExponentiatedGradientReduction"]
+    classifier_names = ["LogReg", "LinearSVC", "XGBoost", "AdversarialDebiasing"]
     states=[state]
 
     fig2 = plt.figure(figsize=(15,4))
-    gs2 = gridspec.GridSpec(1, 5)
+    gs2 = gridspec.GridSpec(1, 4)
 
     for s in range(len(states)):
         for c in range(len(classifier_names)):
@@ -480,19 +480,19 @@ def roc_curve_race(state: str, year:str):
 
             tpr_mean_white = np.mean(interp_tprs['white'], axis=0)
             tpr_mean_white[-1] = 1.0
-            tpr_std_white = 2 * np.std(interp_tprs['white'], axis=0)
+            tpr_std_white = np.std(interp_tprs['white'], axis=0)
             tpr_upper_white = np.clip(tpr_mean_white + tpr_std_white, 0, 1)
             tpr_lower_white = tpr_mean_white - tpr_std_white
 
             tpr_mean_black = np.mean(interp_tprs['black'], axis=0)
             tpr_mean_black[-1] = 1.0
-            tpr_std_black = 2 * np.std(interp_tprs['black'], axis=0)
+            tpr_std_black = np.std(interp_tprs['black'], axis=0)
             tpr_upper_black = np.clip(tpr_mean_black + tpr_std_black, 0, 1)
             tpr_lower_black = tpr_mean_black - tpr_std_black
 
             tpr_mean_other = np.mean(interp_tprs['other'], axis=0)
             tpr_mean_other[-1] = 1.0
-            tpr_std_other = 2 * np.std(interp_tprs['other'], axis=0)
+            tpr_std_other = np.std(interp_tprs['other'], axis=0)
             tpr_upper_other = np.clip(tpr_mean_other + tpr_std_other, 0, 1)
             tpr_lower_other = tpr_mean_other - tpr_std_other
 
@@ -513,32 +513,51 @@ def roc_curve_race(state: str, year:str):
 
     return fig2
 
-def map_plot_ml_results_spatial(result_paths_sklearn: list, result_paths_aif: list):
+def map_plot_ml_results_spatial(result_paths_sklearn: list, result_paths_aif: list, dependent: str):
     """
 
-    :param result_paths_sklearn:
-    :param result_paths_aif:
+    :param result_paths_sklearn: list of paths to csv result files (sklearn)
+    :param result_paths_aif: list of paths to csv result files (aif)
+    :param dependent: the variable to show on y-axis in the plot
     :return:
     """
+
+    dependent_color = {"accuracy":"#569de8",
+                       "sex_dpd":"#d1c84d",
+                       "sex_eod": "#c44629",
+                       "rac_dpd": "#948809",
+                       "rac_eod": "#e8917d",
+                       }
 
     dfs = []
     for p in range(len(result_paths_sklearn)):
         df = pd.read_csv(result_paths_sklearn[p], header=0, sep=',')
+        df.rename(columns={'Unnamed: 0': 'state'}, inplace=True)
         state = os.path.split(result_paths_sklearn[p])[1][8:10]
         start, end = f'spatial_{state}_test_all_', '.csv'
         df['CLASSIFIER'] = re.search('%s(.*)%s' % (start, end), result_paths_sklearn[p]).group(1)
-        df['CLASSIFIER_TYPE'] = "normal"
+        #df['CLASSIFIER_TYPE'] = "normal"
         dfs.append(df)
-    for p in range(len(result_paths_aif)):
-        df = pd.read_csv(result_paths_aif[p], header=0, sep=',')
-        state = os.path.split(result_paths_aif[p])[1][8:10]
-        start, end = f'spatial_{state}_test_all_', '.csv'
-        df['CLASSIFIER'] = re.search('%s(.*)%s' % (start, end), result_paths_aif[p]).group(1)
-        df['CLASSIFIER_TYPE'] = "fairness_aware"
-        dfs.append(df)
+    #for p in range(len(result_paths_aif)):
+    df = pd.read_csv(result_paths_aif[0], header=0, sep=',')
+    df.rename(columns={'Unnamed: 0': 'state'}, inplace=True)
+    state = os.path.split(result_paths_aif[0])[1][8:10]
+    start, end = f'spatial_{state}_test_all_', '.csv'
+    df['CLASSIFIER'] = re.search('%s(.*)%s' % (start, end), result_paths_aif[0]).group(1)
+    #df['CLASSIFIER_TYPE'] = "fairness_aware"
+    dfs.append(df)
 
     final_df = pd.concat(dfs)
-    fig = px.box(final_df, x="CLASSIFIER", y="accuracy", color='CLASSIFIER_TYPE', points="all",
+    final_df.reset_index(inplace=True,drop=True)
+    # remove puerto rico from result files (not included in final states in the end)
+    final_df = final_df[~final_df['state'].isin(['PR'])]
+
+    fig = px.box(final_df,
+                 x="CLASSIFIER",
+                 y=dependent,
+                 hover_data=["state"],
+                 points="all",
+                 color_discrete_sequence=[dependent_color[dependent]],
                  width=1900)
     fig.update_layout(legend=dict(
         orientation="h",
