@@ -61,7 +61,7 @@ st.sidebar.markdown("In this section of the app you can perform some exploratory
 
 eda_form = st.form("My form")
 
-select_task = eda_form.selectbox('Which classification task do you want to focus on?', task_infos['task_names'])
+select_task = eda_form.selectbox('Which classification task do you want to focus on?', ['ACSEmployment'])
 select_state = eda_form.selectbox('Which state do you want to see?', task_infos['states'])
 select_year = eda_form.selectbox('Which year do you want to see?', np.arange(min(task_infos['years']),
                                                                              max(task_infos['years'])+1))
@@ -75,11 +75,13 @@ if submitted:
                                     f'{str(select_year)}_{select_state}_{select_task}.csv'), sep=',', index_col=0)
     target_name = task_infos["tasks"][task_infos["task_col_map"][select_task]]["target"]
 
-    # map int values to string values in order to make plots more understandable
-    if select_task == "ACSHealthInsurance":
-        data = preprocess_healthinsurance(data)
+    # -------preprocessing-------
+    for c in task_infos['tasks'][1]['columns']:
+        data.loc[:, c] = data.loc[:, c].astype(int)
 
-    # keep copy for more detailed plots
+    data = data[data['AGEP'].between(16, 90)]
+    data.reset_index(drop=True, inplace=True)
+    # (keep copy for more detailed plots)
     data["RAC1P_r"] = data['RAC1P']
     # recode to be only white, black or other
     data.loc[data['RAC1P'] > 2, 'RAC1P'] = 3
@@ -132,17 +134,17 @@ if submitted:
                 value=len(data),
                 delta_color='off')
     target_proportion = data[target_name].value_counts(normalize=True).to_dict()
-    col2.metric(f"% of samples in class 0",
+    col2.metric(f"% of not employed",
                 value=round(target_proportion[cols_infos[target_name][0]], 4),
                 delta_color='off')
-    col3.metric(f"% of samples in class 1",
+    col3.metric(f"% of employed",
                 value=round(target_proportion[cols_infos[target_name][1]], 4),
                 delta_color='off')
 
     st.write("The second row focuses on the protected attributes, and shows the proportion of samples in the dataset "
              "that belong to the privileged group of the protected attribute. for the variable SEX the privileged "
              "attribute is 1 (male) and for the variable RAC1P the privileged attribute is 1 (white)")
-    col4, col5, col6 = st.columns(3)
+    col4, col5 = st.columns(2)
     sex_proportion = data['SEX'].value_counts(normalize=True).to_dict()
     col4.metric(f"% of male samples",
                 value=round(sex_proportion[1], 4),
@@ -150,10 +152,6 @@ if submitted:
     race_proportion = data['RAC1P'].value_counts(normalize=True).to_dict()
     col5.metric(f"% of white samples",
                 value=round(race_proportion[1], 4),
-                delta_color='off')
-    nativity_proportion = data['NATIVITY'].value_counts(normalize=True).to_dict()
-    col6.metric(f"% of foreign-born samples",
-                value=round(nativity_proportion[2], 4),
                 delta_color='off')
 
     #############################################
