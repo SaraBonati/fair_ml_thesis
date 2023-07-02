@@ -90,13 +90,13 @@ def merge_dataframes_eda(paths: list, task: str):
 
     dfs = []
     for p in range(len(paths)):
-        df = pd.read_csv(paths[p], sep=",")
 
-        if task == "ACSHealthInsurance":
-            df = preprocess_healthinsurance(df)
+        df = pd.read_csv(paths[p], sep=",", index_col=0)
 
+        df = df[df['AGEP'].between(16, 90)]
         df["YEAR"] = task_infos["years"][p]
         dfs.append(df)
+
     return pd.concat(dfs, ignore_index=True)
 
 
@@ -136,16 +136,17 @@ def make_mapplot(df, metric: str, title: str, context: str, state_col: str, colo
     return fig
 
 
-def make_protected_plots(df, df_all_years, target_name: str):
+def make_protected_plots(df, year: int):
     """
-    Returns basic plot of distribution of protected attributes
+    Returns basic pie chart of distribution of protected attributes
     :param df:
-    :param df_all_years:
-    :param target_name:
+    :param year:
+
     :return:
     """
     # sex
-    df_percent = df['SEX'].value_counts(normalize=True).reset_index().rename(columns={'index': 'sex_class'})
+    df_percent = df[df['YEAR']==year]['SEX'].value_counts(normalize=True).reset_index().rename(columns={'index':
+                                                                                                       'sex_class'})
     fig1 = px.pie(df_percent,
                   values='SEX',
                   names='sex_class',
@@ -154,16 +155,27 @@ def make_protected_plots(df, df_all_years, target_name: str):
     fig1.update_traces(textposition='inside', textinfo='percent+label')
 
     # race
-    df_percent = df['RAC1P'].value_counts(normalize=True).reset_index().rename(columns={'index': 'race'})
+    df_percent = df[df['YEAR']==year]['RAC1P'].value_counts(normalize=True).reset_index().rename(columns={'index': 'race'})
     fig2 = px.pie(df_percent,
                   values='RAC1P',
                   names='race',
                   color='race',
                   color_discrete_map={
-                      1: "Crimson",
-                      2: "SteelBlue",
-                      3: "DarkViolet"
-                  })
+                        "White": "Crimson",
+                        "Black/African American": "SteelBlue",
+                        "American Indian": "Silver",
+                        "Alaska Native": "PowderBlue",
+                        "American Indian and Alaska Native tribes": "Chocolate",
+                        "Asian": "DarkViolet",
+                        "Native Hawaiian and Other Pacific Islander": "LimeGreen",
+                        "Some Other Race": "DarkSlateGrey",
+                        "Two or More Races": "DarkSeaGreen"
+                    })
+    #               color_discrete_map={
+    #                   1: "Crimson",
+    #                   2: "SteelBlue",
+    #                   3: "DarkViolet"
+    #               })
     # color_discrete_map={
     #     "White": "Crimson",
     #     "Black/African American": "SteelBlue",
@@ -178,15 +190,15 @@ def make_protected_plots(df, df_all_years, target_name: str):
     fig2.update_traces(textposition='inside', textinfo='percent+label')
 
     # race detailed
-    df_percent = df['RAC1P_r'].value_counts(normalize=True).reset_index().rename(columns={'index': 'race'})
+    df_percent = df[df['YEAR']==year]['RAC1P_r'].value_counts(normalize=True).reset_index().rename(columns={'index': 'race'})
     fig3 = px.pie(df_percent,
                   values='RAC1P_r',
                   names='race',
                   color='race',
                   color_discrete_map={
-                      1: "Crimson",
-                      2: "SteelBlue",
-                      3: "DarkViolet"
+                      "White": "Crimson",
+                      "Black/African American": "SteelBlue",
+                      "Other": "Orange"
                   })
     # color_discrete_map={
     #     "White": "Crimson",
@@ -204,23 +216,25 @@ def make_protected_plots(df, df_all_years, target_name: str):
     return fig1, fig2, fig3
 
 
-def make_demographic_plots(df, df_all_years, target_name: str):
+def make_demographic_plots(df, df_all_years, target_name: str, year: int):
     """
     Returns histograms and pie charts of demographic variables
     for a state - year specific dataframe
     :param df: dataframe (state - year specific)
     :param df_all_years: dataframe (state specific, all years)
     :param target_name: name of target variable column
+    :param year:
     :return:
     """
-    # one year only
-    fig1 = px.histogram(df, x="RAC1P", y=target_name, facet_col=target_name,
+    # one year only (was df before)
+    fig1 = px.histogram(df_all_years[df_all_years['YEAR']==year], x="RAC1P", y=target_name, facet_col=target_name,
                         color='SEX',
                         color_discrete_map={'Female': 'coral', 'Male': 'teal'},
                         barmode='group',
                         histfunc='count',
                         width=800,
                         height=800)
+    fig1.update_xaxes(tickangle=45)
 
     # all years
     fig2 = px.histogram(df_all_years, x="RAC1P", y=target_name,
@@ -569,22 +583,31 @@ def map_plot_ml_results_spatial(result_paths_sklearn: list, result_paths_aif: li
     return fig
 
 
-def plot_ml_results_temporal(result_path):
+def plot_ml_results_temporal(result_paths_sklearn: list, result_paths_aif: list, year: int, dependent: str):
     """
 
     :param result_paths: list of paths to results (different files for different classifiers)
     :return:
     """
 
-    df = pd.read_csv(result_path, sep=',')
-    df.rename(columns={'Unnamed: 0': 'clf', 'Unnamed: 1': 'year'}, inplace=True)
+    df_sklearn = pd.read_csv(result_paths_sklearn[0], header=0, sep=',')
+    df_sklearn.rename(columns={'Unnamed: 0': 'classifier', 'Unnamed: 1': 'year'}, inplace=True)
+    if 'rac_eod' not in list(df_sklearn.columns):
+        df_sklearn.rename(columns={'rac_edd': 'rac_eod'}, inplace=True)
+
+
+    df_aif = pd.read_csv(result_paths_aif[0], header=0, sep=',')
+    df_aif.rename(columns={'Unnamed: 0': 'classifier', 'Unnamed: 1': 'year'}, inplace=True)
+    df_aif=df_aif[df_aif['classifier']!='ExponentiatedGradientReduction']
+
+    df = pd.concat([df_sklearn, df_aif], ignore_index=True)
 
     # fig = px.bar(df, x="year", y="accuracy", color="clf", barmode="group")
-    fig = px.line(df, x="year", y="accuracy", color="clf", markers=True)
+    fig = px.line(df, x="year", y=dependent, color="classifier", markers=True, title=f'Training year = {year}')
     # Update xaxis properties
     fig.update_xaxes(title_text="Year")
     # Update yaxis properties
-    fig.update_yaxes(title_text="Accuracy", range=[0, 1])
+    fig.update_yaxes(title_text=dependent, range=[0, 1])
 
     return fig
 
@@ -732,5 +755,4 @@ if __name__ == "__main__":
         print(ddir)
         print(json_file_path)
 
-        # eda_metrics_usa("ACSEmployment", args.overwrite)
-        eda_metrics_usa("ACSHealthInsurance", args.overwrite)
+        eda_metrics_usa("ACSEmployment", args.overwrite)
