@@ -94,7 +94,10 @@ def merge_dataframes_eda(paths: list, task: str):
         df = pd.read_csv(paths[p], sep=",", index_col=0)
 
         df = df[df['AGEP'].between(16, 90)]
-        df["YEAR"] = task_infos["years"][p]
+        if task != 'EDA':
+            df["YEAR"] = task_infos["years"][p]
+        if task=='EDA':
+            df['STATE'] = task_infos['states'][p]
         dfs.append(df)
 
     return pd.concat(dfs, ignore_index=True)
