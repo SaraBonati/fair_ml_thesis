@@ -59,15 +59,17 @@ st.sidebar.markdown("In this section of the app you can perform some exploratory
 #############################################
 # Select task state and year
 #############################################
+col1, col2= st.columns([0.4, 0.6])
 
-eda_form = st.form("My form")
+with col1:
+    eda_form = st.form("My form")
 
-select_task = eda_form.selectbox('Which classification task do you want to focus on?', ['ACSEmployment'])
-select_state = eda_form.selectbox('Which state do you want to see?', task_infos['states'])
-select_year = eda_form.selectbox('Which year do you want to see?', np.arange(min(task_infos['years']),
-                                                                             max(task_infos['years'])+1))
-show_all_usa = eda_form.checkbox("Show EDA also for all US states")
-submitted = eda_form.form_submit_button("Submit")
+    select_task = eda_form.selectbox('Which classification task do you want to focus on?', ['ACSEmployment'])
+    select_state = eda_form.selectbox('Which state do you want to see?', task_infos['states'])
+    select_year = eda_form.selectbox('Which year do you want to see?', np.arange(min(task_infos['years']),
+                                                                                 max(task_infos['years'])+1))
+    #show_all_usa = eda_form.checkbox("Show EDA also for all US states")
+    submitted = eda_form.form_submit_button("Submit")
 
 if submitted:
 
@@ -188,9 +190,9 @@ if submitted:
     # st.plotly_chart(fig2, use_container_width=True)
     st.plotly_chart(fig2)
 
-    st.markdown(f"### State-specific demographic and protected attributes Info")
-    st.markdown(f"Next, we visualize more closely the relationship between the demographic attributes present in the "
-                f"dataset and the protected attributes.")
+    # st.markdown(f"### State-specific demographic and protected attributes Info")
+    # st.markdown(f"Next, we visualize more closely the relationship between the demographic attributes present in the "
+    #             f"dataset and the protected attributes.")
 
     # # figure 3 and figure 4
     # st.markdown(f"What is the age distribution in {select_state} as a function of race and sex?")
@@ -207,6 +209,7 @@ if submitted:
     #############################################
     # ALL US states figures
     #############################################
+    show_all_usa = False
     if show_all_usa:
 
         st.markdown(f"### ALL US States")

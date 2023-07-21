@@ -104,7 +104,8 @@ if select_context == 'spatial':
     st.markdown(f"## Figures")
     st.markdown(f"In the following figures we concentrate on the models' performance when using {select_state} as "
                 f"training data, tested on all other us states. We first look at accuracy: accuracy results are "
-                f"displayed below in a US map")
+                f"displayed below in a US map (on the left the traditional ML model chosen above, on the right the "
+                f"fairness-aware model)")
 
     # accuracy map plots
     map1, map2 = st.columns(2)
@@ -118,17 +119,17 @@ if select_context == 'spatial':
         fig_map = make_mapplot(df_sklearn, "accuracy", "Accuracy (normal classifiers)",
                                select_context,
                                "state", "blues")
-        st.write("TODO: expand to show all classifiers with mapplot")
+
         st.plotly_chart(fig_map)
 
     with map2:
         df_aif = pd.read_csv(results_aif360_paths[0], header=0, sep=',')
         df_aif.rename(columns={'Unnamed: 0': 'state'}, inplace=True)
         df_aif = df_aif[~df_aif['state'].isin(['PR'])]
-        fig_map = make_mapplot(df_aif, "accuracy", "Accuracy (normal classifiers)",
+        fig_map = make_mapplot(df_aif, "accuracy", "Accuracy (aif360 classifiers)",
                                select_context,
                                "state", "reds")
-        st.write("TODO: expand to show all classifiers with mapplot")
+
         st.plotly_chart(fig_map)
     # fig = plot_ml_results_spatial(results_sklearn_paths)
     # st.plotly_chart(fig)
@@ -152,7 +153,7 @@ if select_context == 'spatial':
                 f"SEX and RAC1P, the information across the US map for the "
                 f"different metrics we collected. Note that: ")
     st.markdown(f"* Demographic parity difference (DPD) is defined as the difference between the largest and the "
-                f"smallest group-level selection rate XX, across all values of the sensitive feature(s). The "
+                f"smallest group-level selection rate, across all values of the sensitive feature(s). The "
                 f"demographic parity difference of 0 means that all groups have the same selection rate."
                 f"For Demographic Parity Difference a value closer to 0 is better")
     st.markdown(f"* Equalized Odds Difference is collected here and stands for the greater of two metrics: "

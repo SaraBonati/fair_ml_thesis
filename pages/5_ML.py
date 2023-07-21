@@ -49,6 +49,12 @@ st.sidebar.markdown("In this page we show the results of the machine learning an
 task = 'ACSEmployment'
 clfiers=['LinearSVC','LogReg','XGBoost','AdversarialDebiasing']
 analysis_dict={'Yes': '(with domain knowledge)' , "No": '(without domain knowledge)'}
+metrics_dict = {'median_accuracy':'median accuracy',
+                 'median_sex_dpd':'median demographic parity difference (with respect to sex)',
+                 'median_rac_dpd':'median demographic parity difference (with respect to race)',
+                 'median_sex_eod':'median equalized odds difference (with respect to sex)',
+                 'median_rac_eod':'median equalized odds difference (with respect to race)'
+                }
 
 ml_form = st.form("ML Results form")
 select_context = ml_form.selectbox('Which context do you want to focus on?', ['spatial', 'temporal'])
@@ -61,6 +67,14 @@ ml_form_submitted = ml_form.form_submit_button("Submit")
 
 if ml_form_submitted:
     if select_context == 'spatial':
+
+        st.markdown(f"""Figure 10 reports the {metrics_dict[select_metric]} for each
+US state $$S$$ at survey year $$T$$ used in the analysis: more specifically, each data point
+represents the median of metric values that a machine learning model trained on
+US state $$S$$ at survey year $$T$$ obtained when tested across all remaining US states
+$$[S′ , S”, ..., S(N−1)]$$ in the same survey year $$T$$. Median metric values are reported
+separately for each classifier used, as well as for the different survey years provided
+in the dataset.""")
 
         results_spatial1 = pd.read_csv(os.path.join(csv_results_dir,'spatial_results_normal.csv'),sep=',',header=0)
         results_spatial1['analysis'] = 'no_sampling'
@@ -75,10 +89,17 @@ if ml_form_submitted:
 
         st.markdown(f'## {select_metric}')
         g = px.box(results_spatial, x="classifier", y=select_metric, points="all", facet_row='year', color='analysis',
-                   hover_data=['state',select_metric], height=1300)
+                   hover_data=['state',select_metric], height=1300,
+                   category_orders={"classifier": ["LinearSVC", "LogReg", "XGBoost", "AdversarialDebiasing"]})
         st.plotly_chart(g,use_container_width=True,height=1300)
 
     if select_context == 'temporal':
+        st.markdown(f"""Figure 10 reports the {metrics_dict[select_metric]} for each
+        US state $$S$$ at survey year $$T$$ used in the analysis: more specifically, each data point represents the
+median of metric values of a model trained on state $$S$$ in survey year $$T$$ deployed to the same state $$S$$ in the 
+remaining survey years $$[T′ , T”, ..., T(M−1)]$$ . Median metric values are reported
+        separately for each classifier used, as well as for the different survey years provided
+        in the dataset.""")
 
         results_temporal1 = pd.read_csv(os.path.join(csv_results_dir, 'results_temporal_normal.csv'), sep=',',
                                    header=0)
@@ -101,9 +122,11 @@ if ml_form_submitted:
                    x="train_year",
                     y=select_metric,
                     color='classifier',
+                   points="all",
                     facet_row="analysis",
                     hover_data=['train_state',select_metric],
-                    height=700
+                    height=700,
+                   category_orders={"classifier": ["LinearSVC", "LogReg", "XGBoost", "AdversarialDebiasing"]}
                     )
         st.plotly_chart(g, use_container_width=True, height=700)
 
